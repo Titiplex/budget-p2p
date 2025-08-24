@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Budget P2P</title>
+    <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header>
+    <h1>Budget P2P</h1>
+    <p>Tout est stocké localement et synchronisé en pair à pair sur le LAN.</p>
+</header>
+<section id="form">
+    <label for="who"></label><input id="who" placeholder="Qui ?"/>
+    <label for="category"></label><input id="category" placeholder="Catégorie"/>
+    <label for="amount"></label><input id="amount" placeholder="Montant (ex: 12.50)"/>
+    <label for="currency"></label><input id="currency" placeholder="Devise (ex: EUR, CAD)" value="EUR"/>
+    <label for="note"></label><input id="note" placeholder="Note (optionnel)"/>
+    <button id="add">Ajouter</button>
+</section>
+<section>
+    <table id="tbl">
+        <thead>
+        <tr>
+            <th>Quand</th>
+            <th>Qui</th>
+            <th>Catégorie</th>
+            <th>Montant</th>
+            <th>Devise</th>
+            <th>Note</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+<script src="app.js"></script>
+</body>
+</html>
