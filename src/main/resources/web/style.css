@@ -187,3 +187,27 @@ button.rowdel {
     opacity: .7;
     font-size: 12px;
 }
+
+#toasts {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000;
+}
+
+.toast {
+    background: #16202a;
+    border: 1px solid #284456;
+    color: #eaeef3;
+    padding: 10px 12px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, .3);
+}
+
+.toast.warn {
+    border-color: #7d2f2f;
+    color: #ffd6d6;
+}

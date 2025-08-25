@@ -266,6 +266,7 @@ function renderBudgetsTable() {
     tbody.querySelectorAll('button.rowdel').forEach(b => {
         b.addEventListener('click', () => window.bridge.deleteBudget(b.dataset.cat));
     });
+    checkAlerts();
 }
 
 function prevMonthStats(targetCcy) {
@@ -402,6 +403,7 @@ function refreshAnalytics() {
     const planned = BUDGETS.map(b => convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY));
     const actual = BUDGETS.map(b => spentByCat.get(b.category) || 0);
     drawBars('chartBudget', 'chartBudget-fallback', labelsB, planned, actual);
+    checkAlerts();
 }
 
 function drawPie(canvasId, fallbackId, entries) {
@@ -630,4 +632,27 @@ function v(id) {
 
 function q(s) {
     return document.querySelector(s);
+}
+
+function toast(msg, cls=''){
+    const t = document.createElement('div'); t.className = 'toast '+cls; t.textContent = msg;
+    const box = document.getElementById('toasts'); box.appendChild(t);
+    setTimeout(()=> { t.remove(); }, 5000);
+}
+
+let LAST_ALERTS = new Set();
+function checkAlerts(){
+    // seuils : >=80% du budget ou dépassement
+    const spentByCat = groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth));
+    for (const b of BUDGETS) {
+        const planned = convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY) + computeRollover(b, prevMonthStats(DISPLAY_CCY));
+        const spent = spentByCat.get(b.category)||0;
+        const key80 = '80:'+b.category, keyOver = '100:'+b.category;
+        if (planned>0 && spent/planned >= 0.8 && !LAST_ALERTS.has(key80)) {
+            toast(`Alerte 80% — ${b.category}: ${spent.toFixed(2)}/${planned.toFixed(2)} ${DISPLAY_CCY}`, ''); LAST_ALERTS.add(key80);
+        }
+        if (spent > planned && !LAST_ALERTS.has(keyOver)) {
+            toast(`Dépassement — ${b.category}: ${spent.toFixed(2)}>${planned.toFixed(2)} ${DISPLAY_CCY}`, 'warn'); LAST_ALERTS.add(keyOver);
+        }
+    }
 }
