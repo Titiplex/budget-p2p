@@ -34,23 +34,9 @@ public class JsBridge {
     }
 
     // Rules
-    public void upsertRule(String json) {
-        // handle in MainController via Op broadcast? Simpler: use repo via Op from JS? Keep symmetric:
-        // We'll pass JSON Op via addRule route in app.js (but to keep simple expose here)
-        // For now, forward to MainController via Op through P2P from JS side is not available,
-        // so we will rely on a dedicated endpoint later if needed.
-        try {
-            ctl.getClass();
-        } catch (Exception ignored) {
-        }
-    }
+    public void upsertRule(String json) { ctl.upsertRuleFromJson(json); }
+    public void deleteRule(String id) { ctl.deleteRule(id); }
 
-    public void deleteRule(String id) {
-        try {
-            ctl.getClass();
-        } catch (Exception ignored) {
-        }
-    }
 
     // Export
     public String exportCsv(String name, String csv) {

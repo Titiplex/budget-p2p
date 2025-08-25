@@ -344,4 +344,42 @@ public class MainController {
     public void fxFetchNow() {
         fxAuto.fetchNow();
     }
+
+    // ---- Rules CRUD (appelées par JS via JsBridge) ----
+    public void upsertRuleFromJson(String json) {
+        try {
+            Rule in = mapper.readValue(json, Rule.class);
+            String ver = clock.tick();
+            Rule r = new Rule(
+                    (in.id() == null || in.id().isEmpty()) ? java.util.UUID.randomUUID().toString() : in.id(),
+                    in.name(),
+                    in.kind(),
+                    in.pattern(),
+                    in.category(),
+                    true,   // active
+                    false,  // deleted
+                    ver,
+                    ss.userId
+            );
+            repo.upsertRule(r);
+            p2p.broadcast(new Op(Op.Type.RULE_UPSERT, r));
+            pushRules();
+        } catch (Exception e) {
+            System.err.println("Failed to upsert rule: " + e.getMessage());
+        }
+    }
+
+    public void deleteRule(String id) {
+        try {
+            String ver = clock.tick();
+            // on envoie un tombstone minimal (id + deleted=true + ver/author)
+            Rule tomb = new Rule(id, "", "", "", "", false, true, ver, ss.userId);
+            repo.tombstoneRule(id, ver, ss.userId);
+            p2p.broadcast(new Op(Op.Type.RULE_DELETE, tomb));
+            pushRules();
+        } catch (Exception e) {
+            System.err.println("Failed to delete rule: " + e.getMessage());
+        }
+    }
+
 }

@@ -120,12 +120,19 @@ document.getElementById('r-save').addEventListener('click', () => {
     const pattern = document.getElementById('r-pattern').value.trim();
     const category = document.getElementById('r-category').value.trim();
     if (!name || !pattern || !category) return alert('Champs requis.');
+
     const payload = {id: '', name, kind, pattern, category, active: true, deleted: false, ver: '', author: ''};
-    // TODO: brancher vers bridge.upsertRule(JSON) si tu veux synchro P2P complète
-    const idx = RULES.findIndex(r => r.name === name);
-    if (idx >= 0) RULES[idx] = payload; else RULES.push(payload);
-    renderRulesTable();
+
+    // 🔗 branchement vers Java (création/MAJ → P2P)
+    if (!window.bridge || !window.bridge.upsertRule) {
+        return alert("Bridge.upsertRule non exposé côté Java — vois étapes 2 & 3.");
+    }
+    window.bridge.upsertRule(JSON.stringify(payload));
+
+    // reset soft
+    document.getElementById('r-pattern').value = '';
 });
+
 
 function renderRulesTable() {
     const tbody = document.querySelector('#tbl-rules tbody');
@@ -133,11 +140,22 @@ function renderRulesTable() {
     tbody.innerHTML = '';
     for (const r of RULES) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.kind)}</td>
-      <td>${escapeHtml(r.pattern)}</td><td>${escapeHtml(r.category)}</td><td></td>`;
+        tr.innerHTML = `
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.kind)}</td>
+      <td>${escapeHtml(r.pattern)}</td>
+      <td>${escapeHtml(r.category)}</td>
+      <td><button class="rowdel" data-id="${r.id}">Supprimer</button></td>`;
         tbody.appendChild(tr);
     }
+    tbody.querySelectorAll('button.rowdel').forEach(b => {
+        b.addEventListener('click', () => {
+            if (!window.bridge || !window.bridge.deleteRule) return alert("Bridge.deleteRule non exposé côté Java.");
+            window.bridge.deleteRule(b.dataset.id);
+        });
+    });
 }
+
 
 function applyRules(e) {
     const hay = ((e.note || '') + ' ' + (e.who || '')).toLowerCase();
