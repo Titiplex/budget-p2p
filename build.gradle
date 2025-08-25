@@ -17,8 +17,7 @@ repositories { mavenCentral() }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'  // DI only; no web server
-//    implementation 'org.jgroups:jgroups:5.2.20.Final'              // P2P cluster
-    implementation 'org.jgroups:jgroups:4.0.0.Final'
+    implementation 'org.jgroups:jgroups:4.0.0.Final'// P2P cluster
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'               // Embedded DB
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'        // Crypto
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
@@ -40,6 +39,7 @@ javafx {
 application {
     mainClass = 'com.titiplex.budget.App'
 }
+project.ext.set("mainClassName", "com.titiplex.budget.App")
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -60,26 +60,30 @@ def appDesc = 'Budget P2P — local, chiffré, temps réel'
 def appVendor = 'Titiplex'
 
 jlink {
+    // 100% mode fusionné
+    mergedModuleName = 'com.titiplex.merged.module'
+    moduleName       = 'com.titiplex.merged.module'
+    mainClass = 'com.titiplex.budget.App'
+    forceMerge 'ALL'
+
     options = ['--strip-debug', '--compress', '2', '--no-header-files', '--no-man-pages']
-
-    // JavaFX : ajoute les bons modules runtime
-    addExtraDependencies('javafx')
-
-    // 💥 Fix Jackson : on fusionne tous les jars jackson* dans le module mergé
-    // (évite "module not found: com.fasterxml.jackson.*" au moment de compiler le module-info mergé)
-    forceMerge('jackson')
-
-    // (Optionnel) si tu avais plusieurs impls SLF4J/Logback, tu peux aussi forcer leur merge :
-    // forceMerge('slf4j', 'logback')
+    addExtraDependencies('javafx', 'java.security.sasl', 'java.security.jgss')
 
     // ServiceLoader: ajoute des 'uses' pour éviter les soucis à l'exécution
     mergedModule {
+        requires 'java.security.sasl'
+        // requires 'java.security.jgss'
         // JGroups SASL (SaslUtils.getFactories())
         uses 'javax.security.sasl.SaslClientFactory'
         uses 'javax.security.sasl.SaslServerFactory'
         // Spring peut utiliser ServiceLoader dynamiquement ; en pratique ça passe,
         // mais ce 'uses' ne fait pas de mal si Spring l’emploie :
         uses 'org.springframework.core.io.ProtocolResolver'
+        // requires 'java.sql'
+        // requires 'java.xml'
+        // requires 'java.net.http'
+        // requires 'jdk.crypto.ec'
+        // requires 'jdk.unsupported'
     }
 
     launcher {
@@ -108,4 +112,10 @@ jlink {
             installerOptions = ['--linux-shortcut', '--linux-menu-group', 'Office;Finance;']
         }
     }
+}
+
+afterEvaluate {
+    tasks.findByName('prepareModulesDir')?.setEnabled(false)
+    tasks.findByName('compileJavaModuleInfo')?.setEnabled(false)
+    tasks.findByName('createDelegatingModules')?.setEnabled(false)
 }
