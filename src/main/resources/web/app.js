@@ -1,4 +1,14 @@
-// Espace de stockage isolé pour les instances
+// ===== Etat =====
+let EXPENSES = [];
+let BUDGETS = [];
+let FX = []; // { code, perBase } per EUR
+let RULES = [];
+const FX_BASE = "EUR";
+
+// devise d'affichage (persistée localement)
+let DISPLAY_CCY = localStorage.getItem("display_ccy") || "EUR";
+
+// Espace pour les instances de graphiques
 window.__charts = window.__charts || {};
 
 function destroyChart(id) {
@@ -12,32 +22,28 @@ function destroyChart(id) {
     window.__charts[id] = null;
 }
 
-// ---- State ----
-let EXPENSES = [];
-let BUDGETS = [];
-let FX = []; // { code, perBase }
-let RULES = [];
-
-const FX_BASE = "EUR";
-
-// ---- Bridges (called by Java) ----
+// ===== Bridge (côté Java) → callbacks =====
 window.onExpenses = (json) => {
     EXPENSES = JSON.parse(json);
     renderExpensesTable();
-    refreshAnalytics();
     renderBudgetsTable();
+    refreshAnalytics();
+    populateDisplayCcyOptions();
 };
 
 window.onBudgets = (json) => {
     BUDGETS = JSON.parse(json);
     renderBudgetsTable();
     refreshAnalytics();
+    populateDisplayCcyOptions();
 };
 
 window.onFx = (json) => {
     FX = JSON.parse(json);
     renderFxTable();
+    renderBudgetsTable();
     refreshAnalytics();
+    populateDisplayCcyOptions();
 };
 
 window.onRules = (json) => {
@@ -45,25 +51,126 @@ window.onRules = (json) => {
     renderRulesTable();
 };
 
-// ---- UI Expenses ----
+// ===== Router simple (3 vues) =====
+document.querySelectorAll('#topnav button').forEach(btn => {
+    btn.addEventListener('click', () => setView(btn.dataset.nav));
+});
+
+function setView(name) {
+    document.querySelectorAll('#topnav button').forEach(b => b.classList.toggle('active', b.dataset.nav === name));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+}
+
+setView('transactions'); // défaut
+
+// ===== Sélecteur de devise d'affichage =====
+const displaySel = document.getElementById('display-ccy');
+displaySel.addEventListener('change', () => setDisplayCurrency(displaySel.value));
+
+function populateDisplayCcyOptions() {
+    const set = new Set([FX_BASE, DISPLAY_CCY]);
+    EXPENSES.forEach(e => e.currency && set.add(e.currency.toUpperCase()));
+    BUDGETS.forEach(b => b.currency && set.add(b.currency.toUpperCase()));
+    FX.forEach(r => r.code && set.add(r.code.toUpperCase()));
+    const arr = Array.from(set).sort();
+    const sel = document.getElementById('display-ccy');
+    const cur = sel.value || DISPLAY_CCY;
+    sel.innerHTML = arr.map(c => `<option ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
+    setDisplayCurrency(sel.value || DISPLAY_CCY);
+}
+
+function setDisplayCurrency(ccy) {
+    DISPLAY_CCY = (ccy || 'EUR').toUpperCase();
+    localStorage.setItem('display_ccy', DISPLAY_CCY);
+    document.getElementById('dash-ccy').textContent = DISPLAY_CCY;
+    document.querySelectorAll('#view-dashboard .ccy').forEach(n => n.textContent = DISPLAY_CCY);
+    // Re-rendus avec conversion avant calculs
+    renderExpensesTable();
+    renderBudgetsTable();
+    refreshAnalytics();
+}
+
+// ===== Utilitaires FX =====
+function rateOf(code) {
+    if (!code) return 1.0;
+    if (code.toUpperCase() === FX_BASE) return 1.0;
+    const r = FX.find(x => x.code && x.code.toUpperCase() === code.toUpperCase());
+    return r ? parseFloat(r.perBase) : NaN; // per EUR
+}
+
+/** Convertit 'amount' de 'from' vers 'to' en utilisant les taux per-EUR. */
+function convertToCurrency(amount, from, to) {
+    const a = parseFloat(amount);
+    if (!isFinite(a)) return 0;
+    const F = (from || '').toUpperCase(), T = (to || '').toUpperCase();
+    if (F === T || !F || !T) return a;
+    const rf = rateOf(F), rt = rateOf(T);
+    if (!isFinite(rf) || !isFinite(rt) || rf <= 0 || rt <= 0) {
+        // si on n'a pas de taux, on garde la valeur (affichage dégradé)
+        return a;
+    }
+    // montant_to = montant_from * (rf / rt)
+    return a * (rf / rt);
+}
+
+// ===== Règles (client) =====
+document.getElementById('r-save').addEventListener('click', () => {
+    const name = document.getElementById('r-name').value.trim();
+    const kind = document.getElementById('r-kind').value.trim();
+    const pattern = document.getElementById('r-pattern').value.trim();
+    const category = document.getElementById('r-category').value.trim();
+    if (!name || !pattern || !category) return alert('Champs requis.');
+    const payload = {id: '', name, kind, pattern, category, active: true, deleted: false, ver: '', author: ''};
+    // TODO: brancher vers bridge.upsertRule(JSON) si tu veux synchro P2P complète
+    const idx = RULES.findIndex(r => r.name === name);
+    if (idx >= 0) RULES[idx] = payload; else RULES.push(payload);
+    renderRulesTable();
+});
+
+function renderRulesTable() {
+    const tbody = document.querySelector('#tbl-rules tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    for (const r of RULES) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.kind)}</td>
+      <td>${escapeHtml(r.pattern)}</td><td>${escapeHtml(r.category)}</td><td></td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function applyRules(e) {
+    const hay = ((e.note || '') + ' ' + (e.who || '')).toLowerCase();
+    for (const r of RULES) {
+        if (!r || r.deleted || r.active === false) continue;
+        try {
+            if (r.kind === 'SUBSTRING' && hay.includes(r.pattern.toLowerCase())) return r.category;
+            if (r.kind === 'REGEX' && new RegExp(r.pattern).test(hay)) return r.category;
+        } catch (_) {
+        }
+    }
+    return null;
+}
+
+// ===== UI Dépenses =====
 function renderExpensesTable() {
     const tbody = document.querySelector('#tbl tbody');
     tbody.innerHTML = '';
     for (const e of EXPENSES) {
-        // auto-categorization hint client-side (non-blocking)
         let cat = e.category || '';
         if (!cat) {
             const c = applyRules(e);
             if (c) cat = c + ' (suggéré)';
         }
+        const converted = convertToCurrency(e.amount, e.currency, DISPLAY_CCY);
         const tr = document.createElement('tr');
         const date = new Date(e.ts).toLocaleString();
         tr.innerHTML = `
       <td>${date}</td>
       <td>${escapeHtml(e.who || '')}</td>
       <td>${escapeHtml(cat)}</td>
-      <td>${e.amount}</td>
-      <td>${escapeHtml(e.currency || '')}</td>
+      <td>${converted.toFixed(2)} ${DISPLAY_CCY}</td>
+      <td>${parseFloat(e.amount).toFixed(2)} ${escapeHtml(e.currency || '')}</td>
       <td>${escapeHtml(e.note || '')}</td>
       <td><button class="rowdel" data-id="${e.id}">Supprimer</button></td>`;
         tbody.appendChild(tr);
@@ -90,7 +197,7 @@ document.getElementById('add').addEventListener('click', () => {
     document.getElementById('amount').value = '';
 });
 
-// ---- Budgets ----
+// ===== Budgets (calculs en devise d'affichage) =====
 document.getElementById('b-save').addEventListener('click', () => {
     const category = document.getElementById('b-cat').value.trim();
     const monthlyLimit = document.getElementById('b-limit').value.trim();
@@ -105,20 +212,21 @@ function renderBudgetsTable() {
     const tbody = document.querySelector('#tbl-budgets tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
-    const spentByCat = groupByCategory(EXPENSES.filter(isSameMonth));
+
+    const spentByCatDisp = groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth));
+
     for (const b of BUDGETS) {
-        const spentRaw = spentByCat.get(b.category) || 0;
-        // convert expenses to budget currency
-        const spent = convertToCurrency(spentRaw, guessExpenseCurrency(b.category), b.currency);
-        const left = parseFloat(b.monthlyLimit) - spent;
-        const cls = left < 0 ? 'warn' : 'ok';
+        const plannedDisp = convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY);
+        const spentDisp = spentByCatDisp.get(b.category) || 0;
+        const leftDisp = plannedDisp - spentDisp;
+        const cls = leftDisp < 0 ? 'warn' : 'ok';
         const tr = document.createElement('tr');
         tr.innerHTML = `
       <td>${escapeHtml(b.category)}</td>
-      <td>${b.monthlyLimit}</td>
-      <td>${escapeHtml(b.currency || '')}</td>
-      <td>${spent.toFixed(2)}</td>
-      <td class="${cls}">${left.toFixed(2)}</td>
+      <td>${parseFloat(b.monthlyLimit).toFixed(2)} ${escapeHtml(b.currency || '')}</td>
+      <td>${plannedDisp.toFixed(2)} ${DISPLAY_CCY}</td>
+      <td>${spentDisp.toFixed(2)} ${DISPLAY_CCY}</td>
+      <td class="${cls}">${leftDisp.toFixed(2)} ${DISPLAY_CCY}</td>
       <td><button class="rowdel" data-cat="${b.category}">Supprimer</button></td>`;
         tbody.appendChild(tr);
     }
@@ -127,23 +235,44 @@ function renderBudgetsTable() {
     });
 }
 
-function guessExpenseCurrency(category) {
-    // naive: pick most frequent currency for this category in current month
-    const by = new Map();
-    for (const e of EXPENSES.filter(isSameMonth)) {
-        if (e.category === category) {
-            by.set(e.currency, (by.get(e.currency) || 0) + 1);
-        }
+// Agrégations converties AVANT calculs
+function groupByCategoryIn(targetCcy, arr) {
+    const m = new Map();
+    for (const e of arr) {
+        const x = convertToCurrency(e.amount, e.currency, targetCcy);
+        m.set(e.category, (m.get(e.category) || 0) + (isNaN(x) ? 0 : x));
     }
-    let best = null, cnt = -1;
-    for (const [k, v] of by) if (v > cnt) {
-        best = k;
-        cnt = v;
-    }
-    return best || FX_BASE;
+    return m;
 }
 
-// ---- FX ----
+function isSameMonth(e) {
+    const now = new Date();
+    const d = new Date(e.ts);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+function keyOfMonth(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function monthlyBuckets(n = 6) {
+    const now = new Date();
+    const list = [];
+    for (let i = n - 1; i >= 0; i--) list.push(keyOfMonth(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+    return list;
+}
+
+function sumByMonthIn(targetCcy, expenses) {
+    const map = new Map(); // key: YYYY-MM
+    for (const e of expenses) {
+        const k = keyOfMonth(new Date(e.ts));
+        const x = convertToCurrency(e.amount, e.currency, targetCcy);
+        map.set(k, (map.get(k) || 0) + (isNaN(x) ? 0 : x));
+    }
+    return map;
+}
+
+// ===== FX =====
 document.getElementById('fx-save').addEventListener('click', () => {
     const code = document.getElementById('fx-code').value.trim().toUpperCase();
     const perBase = document.getElementById('fx-rate').value.trim();
@@ -151,6 +280,9 @@ document.getElementById('fx-save').addEventListener('click', () => {
     const r = {code, perBase, deleted: false, ver: '', author: ''};
     window.bridge.upsertFx(JSON.stringify(r));
     document.getElementById('fx-rate').value = '';
+});
+document.getElementById('fx-refresh').addEventListener('click', () => {
+    if (window.bridge.fxFetchNow) window.bridge.fxFetchNow();
 });
 
 function renderFxTable() {
@@ -168,129 +300,23 @@ function renderFxTable() {
     });
 }
 
-function rateOf(code) {
-    if (!code) return 1.0;
-    const r = FX.find(x => x.code.toUpperCase() === code.toUpperCase());
-    return r ? parseFloat(r.perBase) : (code.toUpperCase() === FX_BASE ? 1.0 : NaN);
-}
-
-function convertToCurrency(amount, from, to) {
-    if (!from || !to || from === to) return parseFloat(amount) || 0;
-    const rf = rateOf(from), rt = rateOf(to);
-    if (!isFinite(rf) || !isFinite(rt) || rf <= 0 || rt <= 0) return parseFloat(amount) || 0;
-    // amount_from * (rf / rt)
-    return (parseFloat(amount) || 0) * (rf / rt);
-}
-
-// ---- Rules ----
-document.getElementById('r-save').addEventListener('click', () => {
-    const name = document.getElementById('r-name').value.trim();
-    const kind = document.getElementById('r-kind').value.trim();
-    const pattern = document.getElementById('r-pattern').value.trim();
-    const category = document.getElementById('r-category').value.trim();
-    if (!name || !pattern || !category) return alert('Champs requis.');
-    // rules are synced via P2P with Op (we'll send through CSV-like channel later). For now add locally by making a fake CSV export path?
-    const payload = {id: '', name, kind, pattern, category, active: true, deleted: false, ver: '', author: ''};
-    // Send as generic op through bridge: not directly supported; future hook
-    alert('Pour synchroniser les règles entre pairs, ajoute le wiring côté Java (Op RULE_UPSERT/RULE_DELETE). En attendant, elles sont prises en compte côté client uniquement.');
-    // Client-side only update (temporary)
-    const idx = RULES.findIndex(r => r.name === name);
-    if (idx >= 0) RULES[idx] = payload; else RULES.push(payload);
-    renderRulesTable();
-});
-
-function renderRulesTable() {
-    const tbody = document.querySelector('#tbl-rules tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    for (const r of RULES) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.kind)}</td>
-      <td>${escapeHtml(r.pattern)}</td><td>${escapeHtml(r.category)}</td>
-      <td></td>`;
-        tbody.appendChild(tr);
-    }
-}
-
-function applyRules(e) {
-    const hay = ((e.note || '') + ' ' + (e.who || '')).toLowerCase();
-    for (const r of RULES) {
-        if (!r.active || r.deleted) continue;
-        try {
-            if (r.kind === 'SUBSTRING') {
-                if (hay.includes(r.pattern.toLowerCase())) return r.category;
-            } else if (r.kind === 'REGEX') {
-                if (new RegExp(r.pattern).test(hay)) return r.category;
-            }
-        } catch (_) {
-        }
-    }
-    return null;
-}
-
-// ---- Analytics & Graphs ----
-function isSameMonth(e) {
-    const now = new Date();
-    const d = new Date(e.ts);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-}
-
-function keyOfMonth(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
-
-function groupByCategory(arr) {
-    const m = new Map();
-    for (const e of arr) {
-        const x = parseFloat(e.amount);
-        const v = m.get(e.category) || 0;
-        m.set(e.category, v + (isNaN(x) ? 0 : x));
-    }
-    return m;
-}
-
-function monthlyBuckets(n = 6) {
-    const now = new Date();
-    const list = [];
-    for (let i = n - 1; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        list.push(keyOfMonth(d));
-    }
-    return list;
-}
-
-function sumByMonth(expenses) {
-    const map = new Map(); // key: YYYY-MM
-    for (const e of expenses) {
-        const d = new Date(e.ts);
-        const k = keyOfMonth(d);
-        const x = parseFloat(e.amount);
-        map.set(k, (map.get(k) || 0) + (isNaN(x) ? 0 : x));
-    }
-    return map;
-}
-
-let catChart = null, monthlyChart = null, budgetChart = null;
-
+// ===== Graphiques (en devise d'affichage) =====
 function refreshAnalytics() {
     // Catégories (mois courant)
-    const cats = Array.from(groupByCategory(EXPENSES.filter(isSameMonth)).entries());
+    const cats = Array.from(groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth)).entries());
     drawPie('chartCat', 'chartCat-fallback', cats);
 
     // 6 derniers mois
     const labels = monthlyBuckets(6);
-    const m = sumByMonth(EXPENSES);
+    const m = sumByMonthIn(DISPLAY_CCY, EXPENSES);
     const series = labels.map(k => m.get(k) || 0);
     drawLine('chartMonthly', 'chartMonthly-fallback', labels, series);
 
     // Budget vs réalisé (mois)
-    const spentByCat = groupByCategory(EXPENSES.filter(isSameMonth));
+    const spentByCat = groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth));
     const labelsB = BUDGETS.map(b => b.category);
-    const planned = BUDGETS.map(b => parseFloat(b.monthlyLimit));
-    const actual = BUDGETS.map(b => {
-        const raw = spentByCat.get(b.category) || 0;
-        return convertToCurrency(raw, guessExpenseCurrency(b.category), b.currency);
-    });
+    const planned = BUDGETS.map(b => convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY));
+    const actual = BUDGETS.map(b => spentByCat.get(b.category) || 0);
     drawBars('chartBudget', 'chartBudget-fallback', labelsB, planned, actual);
 }
 
@@ -311,7 +337,7 @@ function drawPie(canvasId, fallbackId, entries) {
         fb.innerHTML = '';
         for (const [k, v] of entries) {
             const row = document.createElement('div');
-            row.innerHTML = `<div class="row"><span>${escapeHtml(k)}</span><span>${v.toFixed(2)}</span></div>
+            row.innerHTML = `<div class="row"><span>${escapeHtml(k)}</span><span>${v.toFixed(2)} ${DISPLAY_CCY}</span></div>
                        <div class="bar" style="width:${Math.min(100, v)}%"></div>`;
             fb.appendChild(row);
         }
@@ -336,7 +362,7 @@ function drawLine(canvasId, fallbackId, labels, series) {
         labels.forEach((lab, i) => {
             const v = series[i] || 0;
             const row = document.createElement('div');
-            row.innerHTML = `<div class="row"><span>${lab}</span><span>${v.toFixed(2)}</span></div>
+            row.innerHTML = `<div class="row"><span>${lab}</span><span>${v.toFixed(2)} ${DISPLAY_CCY}</span></div>
                        <div class="bar" style="width:${Math.min(100, v)}%"></div>`;
             fb.appendChild(row);
         });
@@ -357,33 +383,31 @@ function drawBars(canvasId, fallbackId, labels, planned, actual) {
         labels.forEach((lab, i) => {
             const p = planned[i] || 0, a = actual[i] || 0;
             const row = document.createElement('div');
-            row.innerHTML = `<div class="row"><span>${escapeHtml(lab)}</span><span>${a.toFixed(2)} / ${p.toFixed(2)}</span></div>
+            row.innerHTML = `<div class="row"><span>${escapeHtml(lab)}</span><span>${a.toFixed(2)} / ${p.toFixed(2)} ${DISPLAY_CCY}</span></div>
                        <div class="bar" style="width:${Math.min(100, a)}%"></div>`;
             fb.appendChild(row);
         });
     }
 }
 
-// ---- Exports ----
+// ===== Exports =====
 document.getElementById('exportCsv').addEventListener('click', () => {
-    const lines = [["ts", "who", "category", "amount", "currency", "note"]];
+    const lines = [["ts", "who", "category", "amount_display", "display_ccy", "amount_original", "currency", "note"]];
     for (const e of EXPENSES) {
-        lines.push([e.ts, e.who || "", e.category || "", e.amount, e.currency || "", (e.note || "").replace(/\n/g, " ")]);
+        const disp = convertToCurrency(e.amount, e.currency, DISPLAY_CCY);
+        lines.push([e.ts, e.who || "", e.category || "", disp.toFixed(2), DISPLAY_CCY, e.amount, e.currency || "", (e.note || "").replace(/\n/g, " ")]);
     }
     const csv = lines.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
     const name = "expenses-" + new Date().toISOString().slice(0, 10) + ".csv";
     const path = window.bridge.exportCsv(name, csv);
     alert(path ? "CSV exporté: " + path : "Échec export CSV");
 });
-
 document.getElementById('exportHtml').addEventListener('click', () => {
-    const img1 = toDataUrl('chartCat');
-    const img2 = toDataUrl('chartMonthly');
-    const img3 = toDataUrl('chartBudget');
+    const img1 = toDataUrl('chartCat'), img2 = toDataUrl('chartMonthly'), img3 = toDataUrl('chartBudget');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Rapport Budget</title>
   <style>body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;color:#222} h1{margin:0 0 8px} h2{margin:16px 0 6px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:6px}</style>
   </head><body>
-  <h1>Rapport Budget – ${new Date().toLocaleString()}</h1>
+  <h1>Rapport Budget – ${new Date().toLocaleString()} (affichage ${DISPLAY_CCY})</h1>
   <h2>Graphiques</h2>
   <img src="${img1}" style="max-width:32%" alt=""/> <img src="${img2}" style="max-width:32%" alt=""/> <img src="${img3}" style="max-width:32%" alt=""/>
   <h2>Dépenses (mois courant)</h2>
@@ -403,13 +427,18 @@ function toDataUrl(id) {
 }
 
 function htmlTableExpenses() {
-    const rows = EXPENSES.filter(isSameMonth).map(e => `<tr>
-    <td>${new Date(e.ts).toLocaleString()}</td><td>${escapeHtml(e.who || '')}</td><td>${escapeHtml(e.category || '')}</td>
-    <td>${e.amount}</td><td>${escapeHtml(e.currency || '')}</td><td>${escapeHtml(e.note || '')}</td></tr>`).join("");
-    return `<table><thead><tr><th>Date</th><th>Qui</th><th>Cat.</th><th>Montant</th><th>Devise</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = EXPENSES.filter(isSameMonth).map(e => {
+        const disp = convertToCurrency(e.amount, e.currency, DISPLAY_CCY);
+        return `<tr><td>${new Date(e.ts).toLocaleString()}</td>
+      <td>${escapeHtml(e.who || '')}</td><td>${escapeHtml(e.category || '')}</td>
+      <td>${disp.toFixed(2)} ${DISPLAY_CCY}</td>
+      <td>${parseFloat(e.amount).toFixed(2)} ${escapeHtml(e.currency || '')}</td>
+      <td>${escapeHtml(e.note || '')}</td></tr>`;
+    }).join("");
+    return `<table><thead><tr><th>Date</th><th>Qui</th><th>Cat.</th><th>Montant (disp.)</th><th>Original</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-// ---- Utils ----
+// ===== Divers =====
 function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, m => ({
         '&': '&amp;',
@@ -419,7 +448,3 @@ function escapeHtml(s) {
         "'": "&#39;"
     }[m]));
 }
-
-document.getElementById('fx-refresh').addEventListener('click', () => {
-    window.bridge.fxFetchNow();
-});
