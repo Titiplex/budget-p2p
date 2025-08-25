@@ -136,6 +136,16 @@ public class MainController {
                     repo.tombstoneRecurring(r.id(), r.ver(), r.author());
                     pushRecurring();
                 }
+                case GOAL_UPSERT -> {
+                    Goal g = mapper.convertValue(op.payload(), Goal.class);
+                    repo.upsertGoal(g);
+                    pushGoals();
+                }
+                case GOAL_DELETE -> {
+                    Goal g = mapper.convertValue(op.payload(), Goal.class);
+                    repo.tombstoneGoal(g.id(), g.ver(), g.author());
+                    pushGoals();
+                }
             }
         } catch (Exception e) {
             System.err.println("Failed to process op: " + e.getMessage());
@@ -459,4 +469,47 @@ public class MainController {
         }
     }
 
+    public void pushGoals() {
+        try {
+            var all = repo.listGoalsActive();
+            String json = mapper.writeValueAsString(all);
+            javafx.application.Platform.runLater(() ->
+            {
+                try {
+                    webview.getEngine().executeScript("window.onGoals(" + mapper.writeValueAsString(json) + ");");
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to push goals: " + e.getMessage());
+        }
+    }
+
+    public void upsertGoalFromJson(String json) {
+        try {
+            Goal in = mapper.readValue(json, Goal.class);
+            String ver = clock.tick();
+            Goal g = new Goal(
+                    (in.id() == null || in.id().isEmpty()) ? java.util.UUID.randomUUID().toString() : in.id(),
+                    in.name(), in.target(), in.currency(), in.dueTs(), false, ver, ss.userId);
+            repo.upsertGoal(g);
+            p2p.broadcast(new Op(Op.Type.GOAL_UPSERT, g));
+            pushGoals();
+        } catch (Exception e) {
+            System.err.println("Failed to upsert goal: " + e.getMessage());
+        }
+    }
+
+    public void deleteGoal(String id) {
+        try {
+            String ver = clock.tick();
+            Goal tomb = new Goal(id, "", java.math.BigDecimal.ZERO, "", 0L, true, ver, ss.userId);
+            repo.tombstoneGoal(id, ver, ss.userId);
+            p2p.broadcast(new Op(Op.Type.GOAL_DELETE, tomb));
+            pushGoals();
+        } catch (Exception e) {
+            System.err.println("Failed to delete goal: " + e.getMessage());
+        }
+    }
 }

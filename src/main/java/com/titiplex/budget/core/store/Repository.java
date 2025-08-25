@@ -44,4 +44,7 @@ public interface Repository {
 
     List<RecurringRule> listRecurringActive();
 
+    void upsertGoal(Goal g);
+    void tombstoneGoal(String id, String ver, String author);
+    List<Goal> listGoalsActive();
 }

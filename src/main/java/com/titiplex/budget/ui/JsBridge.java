@@ -63,4 +63,12 @@ public class JsBridge {
     public void deleteRecurring(String id) {
         ctl.deleteRecurring(id);
     }
+
+    public void upsertGoal(String json) {
+        ctl.upsertGoalFromJson(json);
+    }
+
+    public void deleteGoal(String id) {
+        ctl.deleteGoal(id);
+    }
 }

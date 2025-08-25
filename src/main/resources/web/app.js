@@ -581,3 +581,53 @@ function qs(s) {
 function esc(s) {
     return (s || '').replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
 }
+
+window.onGoals = (json) => {
+    GOALS = JSON.parse(json);
+    renderGoals();
+};
+let GOALS = [];
+
+document.getElementById('g-save').addEventListener('click', () => {
+    const name = v('g-name'), target = v('g-target'), currency = v('g-ccy'), due = v('g-due');
+    if (!name || !target || !currency) return alert('Nom/target/devise requis.');
+    const dueTs = due ? Date.parse(due + 'T00:00:00') : 0;
+    const payload = {id: '', name, target, currency, dueTs, deleted: false, ver: '', author: ''};
+    window.bridge.upsertGoal(JSON.stringify(payload));
+});
+
+function renderGoals() {
+    const tbody = q('#tbl-goals tbody');
+    tbody.innerHTML = '';
+    for (const g of GOALS) {
+        const targetDisp = convertToCurrency(g.target, g.currency, DISPLAY_CCY);
+        const saved = sumGoalContribIn(g, DISPLAY_CCY);
+        const pct = targetDisp > 0 ? Math.min(100, (saved / targetDisp) * 100) : 0;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${esc(g.name)}</td>
+      <td>${targetDisp.toFixed(2)} ${DISPLAY_CCY}</td>
+      <td>${saved.toFixed(2)} ${DISPLAY_CCY} (${pct.toFixed(0)}%)</td>
+      <td>${g.dueTs ? new Date(g.dueTs).toLocaleDateString() : '-'}</td>
+      <td><button class="rowdel" data-id="${g.id}">Supprimer</button></td>`;
+        tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('button.rowdel').forEach(b => b.addEventListener('click', () => window.bridge.deleteGoal(b.dataset.id)));
+}
+
+function sumGoalContribIn(g, ccy) {
+    // convention simple: toute dépense dont la note contient #[goal:<goalId>] est une contribution
+    const tag = "#[goal:" + g.id + "]";
+    let s = 0;
+    for (const e of EXPENSES) {
+        if ((e.note || '').includes(tag)) s += convertToCurrency(e.amount, e.currency, ccy);
+    }
+    return s;
+}
+
+function v(id) {
+    return document.getElementById(id).value.trim();
+}
+
+function q(s) {
+    return document.querySelector(s);
+}

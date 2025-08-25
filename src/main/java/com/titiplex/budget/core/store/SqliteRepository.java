@@ -85,6 +85,16 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                     "ver TEXT," +
                     "author TEXT" +
                     ")");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS goals (" +
+                    "id TEXT PRIMARY KEY, " +
+                    "name TEXT, " +
+                    "target TEXT, " +
+                    "currency TEXT, " +
+                    "due_ts INTEGER," +
+                    "deleted INTEGER DEFAULT 0, " +
+                    "ver TEXT, " +
+                    "author TEXT)");
+
             try {
                 st.executeUpdate("ALTER TABLE budgets ADD COLUMN rollover_mode TEXT DEFAULT 'NONE'");
             } catch (SQLException ignore) {
@@ -487,7 +497,7 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                             rs.getInt("day"),
                             rs.getInt("weekday"),
                             rs.getInt("month"),
-                            new java.math.BigDecimal(rs.getString("amount")),
+                            new BigDecimal(rs.getString("amount")),
                             rs.getString("currency"),
                             rs.getString("category"),
                             rs.getString("note"),
@@ -504,4 +514,78 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
         }
     }
 
+    @Override
+    public void upsertGoal(Goal g) {
+        try (PreparedStatement psG = conn.prepareStatement("SELECT ver,author FROM goal WHERE id=?")) {
+            psG.setString(1, g.id());
+            try (ResultSet rs = psG.executeQuery()) {
+                boolean shouldWrite = true;
+                if (rs.next())
+                    shouldWrite = compareVer(g.ver(), rs.getString("ver"), g.author(), rs.getString("author")) > 0;
+                if (shouldWrite) {
+                    String sql = "INSERT INTO goal(id,name,target,currency,due_ts,deleted,ver,author) " +
+                            "VALUES(?,?,?,?,?,?,?,?) " +
+                            "ON CONFLICT(id) DO UPDATE SET name=excluded.name, target=excluded.target, currency=excluded.currency, due_ts=excluded.due_ts," +
+                            "deleted=excluded.deleted, ver=excluded.ver, author=excluded.author";
+                    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                        ps.setString(1, g.id());
+                        ps.setString(2, g.name());
+                        ps.setString(3, g.currency());
+                        ps.setLong(4, g.dueTs());
+                        ps.setInt(5, g.deleted() ? 1 : 0);
+                        ps.setString(6, g.ver());
+                        ps.setString(7, g.author());
+                        ps.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    @Override
+    public void tombstoneGoal(String id, String ver, String author) {
+        try (PreparedStatement psG = conn.prepareStatement("SELECT ver,author FROM goal WHERE id=?")) {
+            psG.setString(1, id);
+            try (ResultSet rs = psG.executeQuery()) {
+                boolean shouldWrite = true;
+                if (rs.next()) shouldWrite = compareVer(ver, rs.getString("ver"), author, rs.getString("author")) > 0;
+                if (shouldWrite) {
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE goal SET deleted=1, ver=?, author=? WHERE id=?")) {
+                        ps.setString(1, ver);
+                        ps.setString(2, author);
+                        ps.setString(3, id);
+                        ps.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public List<Goal> listGoalsActive() {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM goal WHERE deleted=0 AND active=1 ORDER BY name ASC")) {
+            List<Goal> out = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new Goal(
+                            rs.getString("id"),
+                            rs.getString("name"),
+                            new BigDecimal(rs.getString("target")),
+                            rs.getString("currency"),
+                            rs.getLong("due_ts"),
+                            false,
+                            rs.getString("ver"),
+                            rs.getString("author")
+                    ));
+                }
+            }
+            return out;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
