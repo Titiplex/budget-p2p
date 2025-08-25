@@ -1,9 +1,6 @@
 package com.titiplex.budget.core.store;
 
-import com.titiplex.budget.core.model.CategoryBudget;
-import com.titiplex.budget.core.model.Expense;
-import com.titiplex.budget.core.model.FxRate;
-import com.titiplex.budget.core.model.Rule;
+import com.titiplex.budget.core.model.*;
 
 import java.util.List;
 
@@ -39,4 +36,12 @@ public interface Repository {
     void tombstoneRule(String id, String ver, String author);
 
     List<Rule> listRulesActive();
+
+    // Recurring
+    void upsertRecurring(RecurringRule r);
+
+    void tombstoneRecurring(String id, String ver, String author);
+
+    List<RecurringRule> listRecurringActive();
+
 }

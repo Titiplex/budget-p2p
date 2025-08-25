@@ -466,3 +466,52 @@ function escapeHtml(s) {
         "'": "&#39;"
     }[m]));
 }
+
+window.onRecurring = (json) => {
+    RECUR = JSON.parse(json);
+    renderRecTable();
+};
+let RECUR = [];
+
+document.getElementById('rec-save').addEventListener('click', () => {
+    const payload = {
+        id: '', name: val('rec-name'), period: val('rec-period'),
+        day: parseInt(val('rec-day') || '0', 10),
+        weekday: parseInt(val('rec-weekday') || '0', 10),
+        month: parseInt(val('rec-month') || '0', 10),
+        amount: val('rec-amount'), currency: val('rec-ccy'),
+        category: val('rec-cat'), note: val('rec-note'),
+        active: true, deleted: false, ver: '', author: ''
+    };
+    if (!payload.name || !payload.period || !payload.amount) return alert('Nom/période/montant requis.');
+    window.bridge.upsertRecurring(JSON.stringify(payload));
+});
+
+function renderRecTable() {
+    const tbody = qs('#tbl-rec tbody');
+    tbody.innerHTML = '';
+    for (const r of RECUR) {
+        const rule = r.period === 'MONTHLY' ? `jour=${r.day}` :
+            r.period === 'WEEKLY' ? `weekday=${r.weekday}` :
+                `jour=${r.day} mois=${r.month}`;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${esc(r.name)}</td><td>${esc(r.period)}</td><td>${esc(rule)}</td>
+                    <td>${parseFloat(r.amount).toFixed(2)}</td><td>${esc(r.currency)}</td>
+                    <td>${esc(r.category)}</td>
+                    <td><button class="rowdel" data-id="${r.id}">Supprimer</button></td>`;
+        tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('button.rowdel').forEach(b => b.addEventListener('click', () => window.bridge.deleteRecurring(b.dataset.id)));
+}
+
+function val(id) {
+    return document.getElementById(id).value.trim();
+}
+
+function qs(s) {
+    return document.querySelector(s);
+}
+
+function esc(s) {
+    return (s || '').replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
+}

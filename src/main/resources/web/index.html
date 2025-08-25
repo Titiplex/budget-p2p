@@ -100,6 +100,66 @@
         </table>
     </section>
 
+    <section id="rules">
+        <h2>Règles d’auto-catégorisation</h2>
+        <div class="row">
+            <label for="r-name"></label><input id="r-name" placeholder="Nom règle"/>
+            <label for="r-kind"></label><select id="r-kind">
+                <option>SUBSTRING</option>
+                <option>REGEX</option>
+            </select>
+            <label for="r-pattern"></label><input id="r-pattern" placeholder="Mot-clé ou regex"/>
+            <label for="r-category"></label><input id="r-category" placeholder="Catégorie cible"/>
+            <button id="r-save">Ajouter / Mettre à jour</button>
+        </div>
+        <table id="tbl-rules">
+            <thead>
+            <tr>
+                <th>Nom</th>
+                <th>Type</th>
+                <th>Pattern</th>
+                <th>Catégorie</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section id="recurring">
+        <h2>Récurrences</h2>
+        <div class="row">
+            <label for="rec-name"></label><input id="rec-name" placeholder="Nom"/>
+            <label for="rec-period"></label><select id="rec-period">
+                <option>MONTHLY</option>
+                <option>WEEKLY</option>
+                <option>YEARLY</option>
+            </select>
+            <label for="rec-day"></label><input id="rec-day" placeholder="Jour (1..31)"/>
+            <label for="rec-weekday"></label><input id="rec-weekday" placeholder="Jour semaine (1=Mon..7=Sun)"/>
+            <label for="rec-month"></label><input id="rec-month" placeholder="Mois (1..12)"/>
+            <label for="rec-amount"></label><input id="rec-amount" placeholder="Montant"/>
+            <label for="rec-ccy"></label><input id="rec-ccy" placeholder="Devise" value="EUR"/>
+            <label for="rec-cat"></label><input id="rec-cat" placeholder="Catégorie"/>
+            <label for="rec-note"></label><input id="rec-note" placeholder="Note"/>
+            <button id="rec-save">Enregistrer</button>
+        </div>
+        <table id="tbl-rec">
+            <thead>
+            <tr>
+                <th>Nom</th>
+                <th>Période</th>
+                <th>Règle</th>
+                <th>Montant</th>
+                <th>Devise</th>
+                <th>Catégorie</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
     <section id="fx">
         <h2>Taux de change (base EUR)</h2>
         <div class="row">
@@ -121,31 +181,6 @@
         <p class="hint">Conversion: montant × rate(from) / rate(to). Exemple: 1 CAD vaut 0.68 EUR.</p>
     </section>
 
-    <section id="rules">
-        <h2>Règles d’auto-catégorisation</h2>
-        <div class="row">
-            <label for="r-name"></label><input id="r-name" placeholder="Nom règle"/>
-            <label for="r-kind"></label><select id="r-kind">
-            <option>SUBSTRING</option>
-            <option>REGEX</option>
-        </select>
-            <label for="r-pattern"></label><input id="r-pattern" placeholder="Mot-clé ou regex"/>
-            <label for="r-category"></label><input id="r-category" placeholder="Catégorie cible"/>
-            <button id="r-save">Ajouter / Mettre à jour</button>
-        </div>
-        <table id="tbl-rules">
-            <thead>
-            <tr>
-                <th>Nom</th>
-                <th>Type</th>
-                <th>Pattern</th>
-                <th>Catégorie</th>
-                <th></th>
-            </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </section>
 </section>
 
 <script src="app.js"></script>

@@ -1,10 +1,7 @@
 package com.titiplex.budget.core.store;
 
 import com.titiplex.budget.core.crdt.HLC;
-import com.titiplex.budget.core.model.CategoryBudget;
-import com.titiplex.budget.core.model.Expense;
-import com.titiplex.budget.core.model.FxRate;
-import com.titiplex.budget.core.model.Rule;
+import com.titiplex.budget.core.model.*;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -72,6 +69,23 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                     "ver TEXT," +
                     "author TEXT" +
                     ")");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS recurring (" +
+                    "id TEXT PRIMARY KEY," +
+                    "name TEXT," +
+                    "period TEXT," +
+                    "day INTEGER," +
+                    "weekday INTEGER," +
+                    "month INTEGER," +
+                    "amount TEXT," +
+                    "currency TEXT," +
+                    "category TEXT," +
+                    "note TEXT," +
+                    "active INTEGER DEFAULT 1," +
+                    "deleted INTEGER DEFAULT 0," +
+                    "ver TEXT," +
+                    "author TEXT" +
+                    ")");
+
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -391,4 +405,94 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
             throw new RuntimeException(e);
         }
     }
+
+    @Override
+    public void upsertRecurring(RecurringRule r) {
+        try (PreparedStatement psSel = conn.prepareStatement("SELECT ver,author FROM recurring WHERE id=?")) {
+            psSel.setString(1, r.id());
+            try (ResultSet rs = psSel.executeQuery()) {
+                boolean shouldWrite = true;
+                if (rs.next())
+                    shouldWrite = compareVer(r.ver(), rs.getString("ver"), r.author(), rs.getString("author")) > 0;
+                if (shouldWrite) {
+                    String sql = "INSERT INTO recurring(id,name,period,day,weekday,month,amount,currency,category,note,active,deleted,ver,author) " +
+                            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) " +
+                            "ON CONFLICT(id) DO UPDATE SET name=excluded.name, period=excluded.period, day=excluded.day, weekday=excluded.weekday," +
+                            "month=excluded.month, amount=excluded.amount, currency=excluded.currency, category=excluded.category, note=excluded.note," +
+                            "active=excluded.active, deleted=excluded.deleted, ver=excluded.ver, author=excluded.author";
+                    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                        ps.setString(1, r.id());
+                        ps.setString(2, r.name());
+                        ps.setString(3, r.period());
+                        ps.setInt(4, r.day());
+                        ps.setInt(5, r.weekday());
+                        ps.setInt(6, r.month());
+                        ps.setString(7, r.amount().toPlainString());
+                        ps.setString(8, r.currency());
+                        ps.setString(9, r.category());
+                        ps.setString(10, r.note());
+                        ps.setInt(11, r.active() ? 1 : 0);
+                        ps.setInt(12, r.deleted() ? 1 : 0);
+                        ps.setString(13, r.ver());
+                        ps.setString(14, r.author());
+                        ps.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    @Override
+    public void tombstoneRecurring(String id, String ver, String author) {
+        try (PreparedStatement psSel = conn.prepareStatement("SELECT ver,author FROM recurring WHERE id=?")) {
+            psSel.setString(1, id);
+            try (ResultSet rs = psSel.executeQuery()) {
+                boolean shouldWrite = true;
+                if (rs.next()) shouldWrite = compareVer(ver, rs.getString("ver"), author, rs.getString("author")) > 0;
+                if (shouldWrite) {
+                    try (PreparedStatement ps = conn.prepareStatement("UPDATE recurring SET deleted=1, ver=?, author=? WHERE id=?")) {
+                        ps.setString(1, ver);
+                        ps.setString(2, author);
+                        ps.setString(3, id);
+                        ps.executeUpdate();
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public List<RecurringRule> listRecurringActive() {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM recurring WHERE deleted=0 AND active=1 ORDER BY name ASC")) {
+            List<RecurringRule> out = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new RecurringRule(
+                            rs.getString("id"),
+                            rs.getString("name"),
+                            rs.getString("period"),
+                            rs.getInt("day"),
+                            rs.getInt("weekday"),
+                            rs.getInt("month"),
+                            new java.math.BigDecimal(rs.getString("amount")),
+                            rs.getString("currency"),
+                            rs.getString("category"),
+                            rs.getString("note"),
+                            rs.getInt("active") == 1,
+                            false,
+                            rs.getString("ver"),
+                            rs.getString("author")
+                    ));
+                }
+            }
+            return out;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

@@ -121,14 +121,14 @@ button.rowdel {
     cursor: pointer;
 }
 
-#budgets .row, #fx .row, #rules .row {
+#budgets .row, #fx .row, #rules .row, #recurring .row {
     display: flex;
     gap: 8px;
     margin: 10px 0;
     flex-wrap: wrap;
 }
 
-#budgets input, #fx input, #rules input, #rules select {
+#budgets input, #fx input, #rules input, #rules select, #recurring input, #recurring select {
     flex: 1;
     min-width: 160px;
     padding: 8px;
@@ -138,7 +138,7 @@ button.rowdel {
     color: #eaeef3;
 }
 
-#budgets button, #fx button, #rules button {
+#budgets button, #fx button, #rules button, #recurring button {
     padding: 8px 12px;
     border-radius: 8px;
     border: 1px solid #28313b;

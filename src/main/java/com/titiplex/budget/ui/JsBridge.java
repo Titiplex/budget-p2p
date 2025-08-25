@@ -34,8 +34,13 @@ public class JsBridge {
     }
 
     // Rules
-    public void upsertRule(String json) { ctl.upsertRuleFromJson(json); }
-    public void deleteRule(String id) { ctl.deleteRule(id); }
+    public void upsertRule(String json) {
+        ctl.upsertRuleFromJson(json);
+    }
+
+    public void deleteRule(String id) {
+        ctl.deleteRule(id);
+    }
 
 
     // Export
@@ -49,5 +54,13 @@ public class JsBridge {
 
     public void fxFetchNow() {
         ctl.fxFetchNow();
+    }
+
+    public void upsertRecurring(String json) {
+        ctl.upsertRecurringFromJson(json);
+    }
+
+    public void deleteRecurring(String id) {
+        ctl.deleteRecurring(id);
     }
 }

@@ -8,6 +8,7 @@ import com.titiplex.budget.core.crypto.SessionState;
 import com.titiplex.budget.core.fx.FxAutoService;
 import com.titiplex.budget.core.model.*;
 import com.titiplex.budget.core.p2p.P2PService;
+import com.titiplex.budget.core.recurring.RecurringService;
 import com.titiplex.budget.core.store.Repository;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -33,15 +34,23 @@ public class MainController {
     private final SessionState ss;
     private final ConfigService config;
     private final FxAutoService fxAuto;
+    private final RecurringService recurring;
     private final ObjectMapper mapper = new ObjectMapper();
     private final HLC.Clock clock;
 
-    public MainController(Repository repo, P2PService p2p, SessionState ss, ConfigService config, FxAutoService fxAuto) {
+    public MainController(
+            Repository repo,
+            P2PService p2p,
+            SessionState ss,
+            ConfigService config,
+            FxAutoService fxAuto,
+            RecurringService recurring) {
         this.repo = repo;
         this.p2p = p2p;
         this.ss = ss;
         this.config = config;
         this.fxAuto = fxAuto;
+        this.recurring = recurring;
         this.clock = new HLC.Clock(ss.userId == null ? UUID.randomUUID().toString() : ss.userId);
     }
 
@@ -52,6 +61,7 @@ public class MainController {
     public void initialize() {
         // Start P2P
         p2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, this::onRemoteOp);
+        recurring.start();
 
         config.saveLastSession(ss);
 
@@ -115,6 +125,16 @@ public class MainController {
                     Rule r = mapper.convertValue(op.payload(), Rule.class);
                     repo.tombstoneRule(r.id(), r.ver(), r.author());
                     pushRules();
+                }
+                case RECUR_UPSERT -> {
+                    RecurringRule r = mapper.convertValue(op.payload(), RecurringRule.class);
+                    repo.upsertRecurring(r);
+                    pushRecurring();
+                }
+                case RECUR_DELETE -> {
+                    RecurringRule r = mapper.convertValue(op.payload(), RecurringRule.class);
+                    repo.tombstoneRecurring(r.id(), r.ver(), r.author());
+                    pushRecurring();
                 }
             }
         } catch (Exception e) {
@@ -379,6 +399,53 @@ public class MainController {
             pushRules();
         } catch (Exception e) {
             System.err.println("Failed to delete rule: " + e.getMessage());
+        }
+    }
+
+    public void pushRecurring() {
+        try {
+            var all = repo.listRecurringActive();
+            String json = mapper.writeValueAsString(all);
+            javafx.application.Platform.runLater(() ->
+            {
+                try {
+                    webview.getEngine().executeScript("window.onRecurring(" + mapper.writeValueAsString(json) + ");");
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to push recurring: " + e.getMessage());
+        }
+    }
+
+    public void upsertRecurringFromJson(String json) {
+        try {
+            RecurringRule in = mapper.readValue(json, RecurringRule.class);
+            String ver = clock.tick();
+            RecurringRule r = new RecurringRule(
+                    (in.id() == null || in.id().isEmpty()) ? java.util.UUID.randomUUID().toString() : in.id(),
+                    in.name(), in.period(), in.day(), in.weekday(), in.month(),
+                    in.amount(), in.currency(), in.category(), in.note(),
+                    true, false, ver, ss.userId
+            );
+            repo.upsertRecurring(r);
+            p2p.broadcast(new Op(Op.Type.RECUR_UPSERT, r));
+            pushRecurring();
+        } catch (Exception e) {
+            System.err.println("Failed to upsert recurring: " + e.getMessage());
+        }
+    }
+
+    public void deleteRecurring(String id) {
+        try {
+            String ver = clock.tick();
+            RecurringRule tomb = new RecurringRule(id, "", "", 0, 0, 0, java.math.BigDecimal.ZERO, "", "", "", false, true, ver, ss.userId);
+            repo.tombstoneRecurring(id, ver, ss.userId);
+            p2p.broadcast(new Op(Op.Type.RECUR_DELETE, tomb));
+            pushRecurring();
+        } catch (Exception e) {
+            System.err.println("Failed to delete recurring: " + e.getMessage());
         }
     }
 
