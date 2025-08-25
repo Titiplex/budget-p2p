@@ -4,6 +4,7 @@ plugins {
     id 'org.openjfx.javafxplugin' version '0.1.0'
     id 'org.springframework.boot' version '3.3.2'
     id 'io.spring.dependency-management' version '1.1.5'
+    id 'org.beryx.jlink' version '3.0.1'
 }
 
 group = 'com.titiplex'
@@ -16,7 +17,7 @@ repositories { mavenCentral() }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'  // DI only; no web server
-    implementation 'org.jgroups:jgroups:5.2.20.Final'              // P2P cluster
+//    implementation 'org.jgroups:jgroups:5.2.20.Final'              // P2P cluster
     implementation 'org.jgroups:jgroups:4.0.0.Final'
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'               // Embedded DB
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'        // Crypto
@@ -47,5 +48,64 @@ tasks.withType(JavaCompile).configureEach {
 tasks.withType(Jar).configureEach {
     manifest {
         attributes 'Main-Class': 'com.titiplex.budget.App'
+    }
+}
+
+bootJar { enabled = false }
+jar { enabled = true }
+
+def OS = org.gradle.internal.os.OperatingSystem.current()
+def appName = 'BudgetP2P'
+def appDesc = 'Budget P2P — local, chiffré, temps réel'
+def appVendor = 'Titiplex'
+
+jlink {
+    options = ['--strip-debug', '--compress', '2', '--no-header-files', '--no-man-pages']
+
+    // JavaFX : ajoute les bons modules runtime
+    addExtraDependencies('javafx')
+
+    // 💥 Fix Jackson : on fusionne tous les jars jackson* dans le module mergé
+    // (évite "module not found: com.fasterxml.jackson.*" au moment de compiler le module-info mergé)
+    forceMerge('jackson')
+
+    // (Optionnel) si tu avais plusieurs impls SLF4J/Logback, tu peux aussi forcer leur merge :
+    // forceMerge('slf4j', 'logback')
+
+    // ServiceLoader: ajoute des 'uses' pour éviter les soucis à l'exécution
+    mergedModule {
+        // JGroups SASL (SaslUtils.getFactories())
+        uses 'javax.security.sasl.SaslClientFactory'
+        uses 'javax.security.sasl.SaslServerFactory'
+        // Spring peut utiliser ServiceLoader dynamiquement ; en pratique ça passe,
+        // mais ce 'uses' ne fait pas de mal si Spring l’emploie :
+        uses 'org.springframework.core.io.ProtocolResolver'
+    }
+
+    launcher {
+        name = appName
+        // jvmArgs += ['--add-opens=javafx.web/com.sun.webkit=ALL-UNNAMED'] // à activer seulement si besoin
+    }
+
+    jpackage {
+        imageName = appName
+        appVersion = project.version
+        vendor = appVendor
+        description = appDesc
+
+        if (OS.isWindows()) {
+            icon = file('packaging/icons/budgetp2p.ico')
+            installerType = 'exe'   // 'msi' possible avec WiX
+            installerOptions = ['--win-menu', '--win-shortcut', '--win-dir-chooser', '--win-menu-group', appName]
+        } else if (OS.isMacOsX()) {
+            // iconutil -c icns budgetp2p.iconset -o packaging/icons/budgetp2p.icns
+            icon = file('packaging/icons/budgetp2p.icns')
+            installerType = 'dmg'
+            installerOptions = ['--mac-package-identifier', 'com.titiplex.budget', '--mac-package-name', appName]
+        } else {
+            icon = file('packaging/icons/budgetp2p.png')
+            installerType = 'deb'   // ou 'rpm'
+            installerOptions = ['--linux-shortcut', '--linux-menu-group', 'Office;Finance;']
+        }
     }
 }
