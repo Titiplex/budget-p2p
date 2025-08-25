@@ -1,5 +1,5 @@
 :root {
-    font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-family: Arial, sans-serif, system-ui, Segoe UI, Roboto, Helvetica;
 }
 
 body {
@@ -24,10 +24,12 @@ h1 {
     gap: 8px;
     padding: 12px 20px;
     border-bottom: 1px solid #1f262e;
+    flex-wrap: wrap;
 }
 
 #form input {
     flex: 1;
+    min-width: 140px;
     padding: 10px;
     border-radius: 10px;
     border: 1px solid #28313b;
@@ -65,4 +67,75 @@ button.rowdel {
     border-radius: 8px;
     padding: 6px 10px;
     cursor: pointer;
+}
+
+#budgets, #dashboard, #fx, #rules {
+    padding: 16px 20px;
+}
+
+#budgets .row, #fx .row, #rules .row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+#budgets input, #fx input, #rules input, #rules select {
+    flex: 1;
+    min-width: 160px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #28313b;
+    background: #0f1419;
+    color: #eaeef3;
+}
+
+#budgets button, #fx button, #rules button {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #28313b;
+    background: #1c7ed6;
+    color: white;
+    cursor: pointer;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.card {
+    background: #0f1419;
+    border: 1px solid #28313b;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.fallback .bar {
+    height: 8px;
+    background: #1c7ed6;
+    border-radius: 4px;
+    margin: 6px 0;
+}
+
+.fallback .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.warn {
+    color: #fa5252;
+    font-weight: 600;
+}
+
+.ok {
+    color: #2f9e44;
+    font-weight: 600;
+}
+
+.hint {
+    opacity: 0.7;
+    font-size: 12px;
 }

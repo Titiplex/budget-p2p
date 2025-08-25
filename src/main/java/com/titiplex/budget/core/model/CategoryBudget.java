@@ -4,16 +4,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 
-public record Expense(
+public record CategoryBudget(
         @JsonProperty("id") String id,
-        @JsonProperty("who") String who,
         @JsonProperty("category") String category,
-        @JsonProperty("amount") BigDecimal amount,
+        @JsonProperty("monthlyLimit") BigDecimal monthlyLimit,
         @JsonProperty("currency") String currency,
-        @JsonProperty("note") String note,
-        @JsonProperty("ts") long ts,
         @JsonProperty("deleted") boolean deleted,
-        @JsonProperty("ver") String ver,       // HLC version
-        @JsonProperty("author") String author  // userId
+        @JsonProperty("ver") String ver,
+        @JsonProperty("author") String author
 ) {
 }

@@ -1,6 +1,5 @@
-
 package com.titiplex.budget.core.model;
 
 public record Op(Type type, Object payload) {
-    public enum Type {ADD, DELETE}
+    public enum Type {ADD, DELETE, BUDGET_UPSERT, BUDGET_DELETE, FX_UPSERT, FX_DELETE, RULE_UPSERT, RULE_DELETE}
 }

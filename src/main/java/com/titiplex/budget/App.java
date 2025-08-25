@@ -1,4 +1,3 @@
-
 package com.titiplex.budget;
 
 import javafx.application.Application;
@@ -27,12 +26,11 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws Exception {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
         loader.setControllerFactory(context::getBean);
         Parent root = loader.load();
-
-        stage.setTitle("Budget P2P");
-        stage.setScene(new Scene(root, 1100, 720));
+        stage.setTitle("Budget P2P - Connexion");
+        stage.setScene(new Scene(root, 800, 540));
         stage.show();
     }
 

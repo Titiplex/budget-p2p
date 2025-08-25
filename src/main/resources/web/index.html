@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <title>Budget P2P</title>
     <link rel="stylesheet" href="style.css"/>
+    <script src="vendor/chart.umd.js"></script>
 </head>
 <body>
 <header>
     <h1>Budget P2P</h1>
-    <p>Tout est stocké localement et synchronisé en pair à pair sur le LAN.</p>
+    <p>Local + synchro chiffrée pair à pair (LAN/WAN via seeds).</p>
 </header>
+
 <section id="form">
     <label for="who"></label><input id="who" placeholder="Qui ?"/>
     <label for="category"></label><input id="category" placeholder="Catégorie"/>
@@ -18,7 +20,10 @@
     <label for="currency"></label><input id="currency" placeholder="Devise (ex: EUR, CAD)" value="EUR"/>
     <label for="note"></label><input id="note" placeholder="Note (optionnel)"/>
     <button id="add">Ajouter</button>
+    <button id="exportCsv">Exporter CSV</button>
+    <button id="exportHtml">Exporter Rapport (HTML)</button>
 </section>
+
 <section>
     <table id="tbl">
         <thead>
@@ -35,6 +40,98 @@
         <tbody></tbody>
     </table>
 </section>
+
+<section id="budgets">
+    <h2>Budgets par catégorie (multi-devises)</h2>
+    <div class="row">
+        <label for="b-cat"></label><input id="b-cat" placeholder="Catégorie"/>
+        <label for="b-limit"></label><input id="b-limit" placeholder="Plafond mensuel (ex: 200)"/>
+        <label for="b-cur"></label><input id="b-cur" placeholder="Devise budget" value="EUR"/>
+        <button id="b-save">Enregistrer budget</button>
+    </div>
+    <table id="tbl-budgets">
+        <thead>
+        <tr>
+            <th>Catégorie</th>
+            <th>Plafond</th>
+            <th>Devise</th>
+            <th>Réalisé (mois)</th>
+            <th>Reste</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+
+<section id="fx">
+    <h2>Taux de change (par rapport à la devise de base EUR)</h2>
+    <button id="fx-refresh">MAJ maintenant</button>
+    <div class="row">
+        <label for="fx-code"></label><input id="fx-code" placeholder="Devise (ex: EUR, CAD, USD)"/>
+        <label for="fx-rate"></label><input id="fx-rate" placeholder="Valeur de 1 unité en EUR (ex: 1.00, 0.68)"/>
+        <button id="fx-save">Enregistrer taux</button>
+    </div>
+    <table id="tbl-fx">
+        <thead>
+        <tr>
+            <th>Devise</th>
+            <th>Par EUR</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <p class="hint">Conversion: montant(exp) × rate(exp) / rate(budget). Exemple: 1 CAD vaut 0.68 EUR.</p>
+</section>
+
+<section id="rules">
+    <h2>Règles d’auto-catégorisation</h2>
+    <div class="row">
+        <label for="r-name"></label><input id="r-name" placeholder="Nom règle"/>
+        <label for="r-kind"></label><select id="r-kind">
+        <option>SUBSTRING</option>
+        <option>REGEX</option>
+    </select>
+        <label for="r-pattern"></label><input id="r-pattern" placeholder="Mot-clé ou regex"/>
+        <label for="r-category"></label><input id="r-category" placeholder="Catégorie cible"/>
+        <button id="r-save">Ajouter / Mettre à jour</button>
+    </div>
+    <table id="tbl-rules">
+        <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Type</th>
+            <th>Pattern</th>
+            <th>Catégorie</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+
+<section id="dashboard">
+    <h2>Dashboard</h2>
+    <div class="grid">
+        <div class="card">
+            <h3>Dépenses par catégorie (mois)</h3>
+            <canvas id="chartCat" width="360" height="200"></canvas>
+            <div id="chartCat-fallback" class="fallback"></div>
+        </div>
+        <div class="card">
+            <h3>Évolution mensuelle (6 derniers mois)</h3>
+            <canvas id="chartMonthly" width="360" height="200"></canvas>
+            <div id="chartMonthly-fallback" class="fallback"></div>
+        </div>
+        <div class="card">
+            <h3>Budget vs Réalisé (mois)</h3>
+            <canvas id="chartBudget" width="360" height="200"></canvas>
+            <div id="chartBudget-fallback" class="fallback"></div>
+        </div>
+    </div>
+</section>
+
 <script src="app.js"></script>
 </body>
 </html>

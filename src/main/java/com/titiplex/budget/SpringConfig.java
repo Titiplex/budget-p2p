@@ -1,4 +1,3 @@
-
 package com.titiplex.budget;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;

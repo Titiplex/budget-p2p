@@ -1,4 +1,3 @@
-
 package com.titiplex.budget.core.crypto;
 
 import org.bouncycastle.crypto.generators.SCrypt;
