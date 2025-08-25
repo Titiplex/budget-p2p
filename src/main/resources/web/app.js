@@ -221,7 +221,19 @@ document.getElementById('b-save').addEventListener('click', () => {
     const monthlyLimit = document.getElementById('b-limit').value.trim();
     const currency = document.getElementById('b-cur').value.trim();
     if (!category || !monthlyLimit) return alert('Catégorie et plafond requis.');
-    const b = {id: '', category, monthlyLimit, currency, deleted: false, ver: '', author: ''};
+    const rolloverMode = document.getElementById('b-roll').value.trim();
+    const rolloverCap = document.getElementById('b-cap').value.trim() || '0';
+    const b = {
+        id: '',
+        category,
+        monthlyLimit,
+        currency,
+        rolloverMode,
+        rolloverCap,
+        deleted: false,
+        ver: '',
+        author: ''
+    };
     window.bridge.upsertBudget(JSON.stringify(b));
     document.getElementById('b-limit').value = '';
 });
@@ -234,7 +246,10 @@ function renderBudgetsTable() {
     const spentByCatDisp = groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth));
 
     for (const b of BUDGETS) {
-        const plannedDisp = convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY);
+        // calc prev month spent/planned in DISPLAY_CCY
+        const prev = prevMonthStats(DISPLAY_CCY);
+        const carried = computeRollover(b, prev); // valeur en DISPLAY_CCY
+        const plannedDisp = convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY) + carried;
         const spentDisp = spentByCatDisp.get(b.category) || 0;
         const leftDisp = plannedDisp - spentDisp;
         const cls = leftDisp < 0 ? 'warn' : 'ok';
@@ -251,6 +266,57 @@ function renderBudgetsTable() {
     tbody.querySelectorAll('button.rowdel').forEach(b => {
         b.addEventListener('click', () => window.bridge.deleteBudget(b.dataset.cat));
     });
+}
+
+function prevMonthStats(targetCcy) {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const key = k => k.getFullYear() + '-' + String(k.getMonth() + 1).padStart(2, '0');
+    const prevKey = key(prev), curKey = key(new Date(now.getFullYear(), now.getMonth(), 1));
+    const m = new Map(); // cat -> {planned, spent}
+    // planned : budgets du mois précédent = on reprend mêmes limites/plans (simplif: on suppose identiques)
+    for (const b of BUDGETS) {
+        const planned = convertToCurrency(b.monthlyLimit, b.currency, targetCcy);
+        m.set(b.category, {planned, spent: 0});
+    }
+    // spent
+    for (const e of EXPENSES) {
+        const d = new Date(e.ts);
+        const k = key(new Date(d.getFullYear(), d.getMonth(), 1));
+        if (k === prevKey) {
+            const x = convertToCurrency(e.amount, e.currency, targetCcy);
+            const slot = m.get(e.category) || {planned: 0, spent: 0};
+            slot.spent += isNaN(x) ? 0 : x;
+            m.set(e.category, slot);
+        }
+    }
+    return m; // Map cat -> {planned, spent}
+}
+
+function computeRollover(b, prevMap) {
+    const slot = prevMap.get(b.category);
+    if (!slot) return 0;
+    const diff = slot.planned - slot.spent; // >0 surplus, <0 déficit
+    let out;
+    switch ((b.rolloverMode || 'NONE').toUpperCase()) {
+        case 'SURPLUS':
+            out = Math.max(0, diff);
+            break;
+        case 'DEFICIT':
+            out = Math.min(0, diff);
+            break;
+        case 'BOTH':
+            out = diff;
+            break;
+        default:
+            out = 0;
+    }
+    const cap = parseFloat(b.rolloverCap || '0');
+    if (cap > 0) {
+        if (out > 0) out = Math.min(out, cap);
+        else out = Math.max(out, -cap);
+    }
+    return out;
 }
 
 // Agrégations converties AVANT calculs

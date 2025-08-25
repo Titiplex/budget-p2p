@@ -83,6 +83,14 @@
             <label for="b-cat"></label><input id="b-cat" placeholder="Catégorie"/>
             <label for="b-limit"></label><input id="b-limit" placeholder="Plafond mensuel (ex: 200)"/>
             <label for="b-cur"></label><input id="b-cur" placeholder="Devise budget" value="EUR"/>
+            <label for="b-roll"></label>
+            <select id="b-roll">
+                <option>NONE</option>
+                <option>SURPLUS</option>
+                <option>DEFICIT</option>
+                <option>BOTH</option>
+            </select>
+            <label for="b-cap"></label><input id="b-cap" placeholder="Plafond report (ex: 100)"/>
             <button id="b-save">Enregistrer budget</button>
         </div>
         <table id="tbl-budgets">
@@ -105,9 +113,9 @@
         <div class="row">
             <label for="r-name"></label><input id="r-name" placeholder="Nom règle"/>
             <label for="r-kind"></label><select id="r-kind">
-                <option>SUBSTRING</option>
-                <option>REGEX</option>
-            </select>
+            <option>SUBSTRING</option>
+            <option>REGEX</option>
+        </select>
             <label for="r-pattern"></label><input id="r-pattern" placeholder="Mot-clé ou regex"/>
             <label for="r-category"></label><input id="r-category" placeholder="Catégorie cible"/>
             <button id="r-save">Ajouter / Mettre à jour</button>
@@ -131,10 +139,10 @@
         <div class="row">
             <label for="rec-name"></label><input id="rec-name" placeholder="Nom"/>
             <label for="rec-period"></label><select id="rec-period">
-                <option>MONTHLY</option>
-                <option>WEEKLY</option>
-                <option>YEARLY</option>
-            </select>
+            <option>MONTHLY</option>
+            <option>WEEKLY</option>
+            <option>YEARLY</option>
+        </select>
             <label for="rec-day"></label><input id="rec-day" placeholder="Jour (1..31)"/>
             <label for="rec-weekday"></label><input id="rec-weekday" placeholder="Jour semaine (1=Mon..7=Sun)"/>
             <label for="rec-month"></label><input id="rec-month" placeholder="Mois (1..12)"/>

@@ -200,7 +200,9 @@ public class MainController {
                     in.currency(),
                     false,
                     ver,
-                    ss.userId
+                    ss.userId,
+                    in.rolloverMode(),
+                    in.rolloverCap()
             );
             repo.upsertBudget(b);
             p2p.broadcast(new Op(Op.Type.BUDGET_UPSERT, b));
@@ -214,8 +216,16 @@ public class MainController {
         try {
             String ver = clock.tick();
             CategoryBudget tomb = new CategoryBudget(
-                    java.util.UUID.randomUUID().toString(), category,
-                    java.math.BigDecimal.ZERO, "", true, ver, ss.userId);
+                    java.util.UUID.randomUUID().toString(),
+                    category,
+                    BigDecimal.ZERO,
+                    "",
+                    true,
+                    ver,
+                    ss.userId,
+                    "NONE",
+                    BigDecimal.ZERO
+            );
             repo.tombstoneBudget(category, ver, ss.userId);
             p2p.broadcast(new Op(Op.Type.BUDGET_DELETE, tomb));
             pushBudgets();

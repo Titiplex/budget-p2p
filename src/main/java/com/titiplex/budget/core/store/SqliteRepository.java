@@ -85,7 +85,14 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                     "ver TEXT," +
                     "author TEXT" +
                     ")");
-
+            try {
+                st.executeUpdate("ALTER TABLE budgets ADD COLUMN rollover_mode TEXT DEFAULT 'NONE'");
+            } catch (SQLException ignore) {
+            }
+            try {
+                st.executeUpdate("ALTER TABLE budgets ADD COLUMN rollover_cap TEXT DEFAULT '0'");
+            } catch (SQLException ignore) {
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -248,7 +255,9 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                             rs.getString("currency"),
                             false,
                             rs.getString("ver"),
-                            rs.getString("author")
+                            rs.getString("author"),
+                            rs.getString("rollover_mode"),
+                            new BigDecimal(rs.getString("rollover_cap"))
                     ));
                 }
             }

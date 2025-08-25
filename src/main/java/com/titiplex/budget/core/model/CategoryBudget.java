@@ -11,6 +11,8 @@ public record CategoryBudget(
         @JsonProperty("currency") String currency,
         @JsonProperty("deleted") boolean deleted,
         @JsonProperty("ver") String ver,
-        @JsonProperty("author") String author
+        @JsonProperty("author") String author,
+        @JsonProperty("rolloverMode") String rolloverMode, // NONE|SURPLUS|DEFICIT|BOTH
+        @JsonProperty("rolloverCap") BigDecimal rolloverCap
 ) {
 }
