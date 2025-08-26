@@ -214,22 +214,23 @@ public class JGroupsP2PService extends ReceiverAdapter implements P2PService {
     }
 
     // --- Stacks JGroups ---
-
     private String udpStack(int bindPort) {
         return """
                 <config>
-                  <UDP bind_port="%PORT%" mcast_port="45588" ip_ttl="2"/>
-                  <PING/>
-                  <MERGE3 min_interval="10000" max_interval="30000"/>
-                  <FD_SOCK/>
-                  <FD_ALL interval="3000" timeout="12000"/>
-                  <VERIFY_SUSPECT timeout="1500"/>
-                  <BARRIER/>
-                  <NAKACK2 use_mcast_xmit="true"/>
-                  <UNICAST3/>
-                  <STABLE/>
-                  <GMS join_timeout="5000" print_local_addr="true"/>
-                  <UFC/><MFC/><FRAG2/>
+                  <org.jgroups.protocols.UDP bind_port="%PORT%" mcast_port="45588" ip_ttl="2"/>
+                  <org.jgroups.protocols.PING/>
+                  <org.jgroups.protocols.MERGE3 min_interval="10000" max_interval="30000"/>
+                  <org.jgroups.protocols.FD_SOCK/>
+                  <org.jgroups.protocols.FD_ALL interval="3000" timeout="12000"/>
+                  <org.jgroups.protocols.VERIFY_SUSPECT timeout="1500"/>
+                  <org.jgroups.protocols.BARRIER/>
+                  <org.jgroups.protocols.pbcast.NAKACK2 use_mcast_xmit="true"/>
+                  <org.jgroups.protocols.UNICAST3/>
+                  <org.jgroups.protocols.pbcast.STABLE/>
+                  <org.jgroups.protocols.pbcast.GMS join_timeout="5000" print_local_addr="true"/>
+                  <org.jgroups.protocols.UFC/>
+                  <org.jgroups.protocols.MFC/>
+                  <org.jgroups.protocols.FRAG2/>
                 </config>
                 """.replace("%PORT%", Integer.toString(bindPort));
     }
@@ -237,28 +238,29 @@ public class JGroupsP2PService extends ReceiverAdapter implements P2PService {
     /**
      * seeds au format "host[port],host[port]" ; externalAddr peut aider JGroups derrière certains NAT.
      */
-    private String tcpStack(List<String> seeds, int bindPort, String externalAddr) {
-        String initial = String.join(",", seeds);
+    private String tcpStack(java.util.List<String> seeds, int bindPort, String externalAddr) {
+        String initial = String.join(",", seeds); // ex: "1.2.3.4[7800],example.com[7800]"
         return """
                 <config>
-                  <TCP bind_port="%PORT%" %EXTERNAL%/>
-                  <TCPPING timeout="2000" initial_hosts="%SEEDS%" port_range="2"/>
-                  <MERGE3 min_interval="10000" max_interval="30000"/>
-                  <FD_SOCK/>
-                  <FD_ALL interval="3000" timeout="12000"/>
-                  <VERIFY_SUSPECT timeout="1500"/>
-                  <BARRIER/>
-                  <NAKACK2 use_mcast_xmit="false"/>
-                  <UNICAST3/>
-                  <STABLE/>
-                  <GMS join_timeout="5000" print_local_addr="true"/>
-                  <UFC/><MFC/><FRAG2/>
+                  <org.jgroups.protocols.TCP bind_port="%PORT%" %EXTERNAL%/>
+                  <org.jgroups.protocols.TCPPING timeout="2000" initial_hosts="%SEEDS%" port_range="2"/>
+                  <org.jgroups.protocols.MERGE3 min_interval="10000" max_interval="30000"/>
+                  <org.jgroups.protocols.FD_SOCK/>
+                  <org.jgroups.protocols.FD_ALL interval="3000" timeout="12000"/>
+                  <org.jgroups.protocols.VERIFY_SUSPECT timeout="1500"/>
+                  <org.jgroups.protocols.BARRIER/>
+                  <org.jgroups.protocols.pbcast.NAKACK2 use_mcast_xmit="false"/>
+                  <org.jgroups.protocols.UNICAST3/>
+                  <org.jgroups.protocols.pbcast.STABLE/>
+                  <org.jgroups.protocols.pbcast.GMS join_timeout="5000" print_local_addr="true"/>
+                  <org.jgroups.protocols.UFC/>
+                  <org.jgroups.protocols.MFC/>
+                  <org.jgroups.protocols.FRAG2/>
                 </config>
                 """
                 .replace("%PORT%", Integer.toString(bindPort))
                 .replace("%SEEDS%", initial)
-                .replace("%EXTERNAL%", externalAddr == null || externalAddr.isBlank()
-                        ? "" : ("external_addr=\"" + externalAddr + "\""));
+                .replace("%EXTERNAL%", externalAddr == null ? "" : ("external_addr=\"" + externalAddr + "\""));
     }
 
     private List<String> normalizeSeeds(List<String> seeds, int defaultPort) {

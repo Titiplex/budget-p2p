@@ -26,7 +26,6 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @Component
@@ -64,39 +63,75 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        wan.start(ss.port);
-
-        String ext = wan.hasPublic() ? wan.publicSocket().getAddress().getHostAddress() : null;
-
-        // Start P2P (prend external_addr si dispo)
-        if (p2p instanceof JGroupsP2PService jp2p) {
-            jp2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, ext, this::onRemoteOp);
-        } else {
-            p2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, this::onRemoteOp);
-        }
-
-        if (wan.hasPublic()) {
-            String host = wan.publicSocket().getAddress().getHostAddress();
-            ((JGroupsP2PService)p2p).announceSelfSeed(host, wan.publicSocket().getPort());
-        }
-        recurring.start();
-
-        config.saveLastSession(ss);
-
         WebEngine engine = webview.getEngine();
-        engine.load(Objects.requireNonNull(getClass().getResource("/web/index.html")).toExternalForm());
-        engine.getLoadWorker().stateProperty().addListener((_, _, st) -> {
-            if (st.toString().equals("SUCCEEDED")) {
+
+        // 1) Vérifie que le HTML est bien packagé
+        var url = getClass().getResource("/web/index.html");
+        if (url == null) {
+            System.err.println("[MainController] Ressource /web/index.html introuvable. " +
+                    "Assure-toi que src/main/resources/web/index.html existe.");
+            // Affiche au moins une page vierge avec un message d’erreur
+            engine.loadContent("<h2 style='font-family:sans-serif;color:#b00'>Ressource /web/index.html introuvable</h2>");
+            return;
+        }
+
+        // 2) Charge l’UI
+        engine.load(url.toExternalForm());
+
+        // 3) Quand la page est prête, installe le bridge puis démarre WAN/P2P
+        engine.getLoadWorker().stateProperty().addListener((obs, old, st) -> {
+            if (!"SUCCEEDED".equals(String.valueOf(st))) return;
+            try {
                 JSObject win = (JSObject) engine.executeScript("window");
                 win.setMember("bridge", new JsBridge(this, ss, p2p));
+
+                // Push des données initiales vers le front
                 pushAll();
                 pushBudgets();
                 pushFx();
                 pushRules();
-                fxAuto.startScheduler();
-                fxAuto.fetchNow();
+
+                // Démarrages réseau/APIs – protégés par try/catch
+                try {
+                    wan.start(ss.port);
+                    String ext = wan.hasPublic()
+                            ? wan.publicSocket().getAddress().getHostAddress()
+                            : null;
+
+                    if (p2p instanceof JGroupsP2PService jp2p) {
+                        jp2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, ext, this::onRemoteOp);
+                    } else {
+                        p2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, this::onRemoteOp);
+                    }
+
+                    if (wan.hasPublic()) {
+                        String host = wan.publicSocket().getAddress().getHostAddress();
+                        ((JGroupsP2PService) p2p).announceSelfSeed(host, wan.publicSocket().getPort());
+                    }
+
+                    recurring.start();
+                    fxAuto.startScheduler();
+                    fxAuto.fetchNow();
+
+                    config.saveLastSession(ss);
+                } catch (Exception netEx) {
+                    System.err.println("[MainController] Erreur démarrage réseau: " + netEx);
+                    // si le front a un toast:
+                    try {
+                        engine.executeScript("window.toast && window.toast('Réseau: ' + " +
+                                "JSON.stringify('" + escape(netEx.getMessage()) + "'), 'warn')");
+                    } catch (Exception ignore) {
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[MainController] initialize() failed: ");
+                System.err.println(e.getMessage());
             }
         });
+    }
+
+    private static String escape(String s) {
+        return s == null ? "" : s.replace("'", "\\'");
     }
 
     void onRemoteOp(Op op) {
@@ -532,6 +567,7 @@ public class MainController {
     public String generateInviteCode() {
         return wan.generateInvite();
     }
+
     public String joinFromInviteCode(String code) {
         try {
             InviteCodec.Parsed p = wan.parse(code);
@@ -540,7 +576,7 @@ public class MainController {
             String seed = p.host() + "[" + p.port() + "]";
             if (!ss.seeds.contains(seed)) ss.seeds.add(seed);
             // reconnecte en TCP
-            ((JGroupsP2PService)p2p).addSeedAndReconnect(p.host(), p.port(), ss.seeds);
+            ((JGroupsP2PService) p2p).addSeedAndReconnect(p.host(), p.port(), ss.seeds);
             config.saveLastSession(ss);
             return "OK";
         } catch (Exception e) {

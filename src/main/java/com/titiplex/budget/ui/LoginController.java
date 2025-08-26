@@ -78,32 +78,48 @@ public class LoginController {
     @FXML
     public void onJoin() {
         try {
-            String name = nameField.getText().trim();
-            String gid = groupIdField.getText().trim();
-            String pass = passField.getText();
-            String seeds = seedsField.getText().trim();
-            int port = Integer.parseInt(portField.getText().trim());
+            String name = (nameField.getText() == null ? "" : nameField.getText().trim());
+            String gid = (groupIdField.getText() == null ? "" : groupIdField.getText().trim());
+            String pass = (passField.getText() == null ? "" : passField.getText());
+            int port = parseIntOrDefault(portField != null ? portField.getText() : null, defaultPort);
 
             if (name.isEmpty() || gid.isEmpty() || pass.isEmpty()) {
+                // tu peux mettre un Label d’erreur si tu veux, mais on sort proprement
                 return;
             }
+
+            // Seeds : champ optionnel (absent du FXML => null)
+            String seedsStr = (seedsField != null && seedsField.getText() != null) ? seedsField.getText().trim() : "";
+            List<String> seeds = seedsStr.isEmpty()
+                    ? new ArrayList<>()
+                    : Arrays.stream(seedsStr.split(","))
+                    .map(String::trim)
+                    .filter(v -> !v.isEmpty())
+                    .collect(Collectors.toList());
 
             idSvc.ensureIdentity(ss, name);
             ss.groupId = gid;
             ss.groupPass = pass;
             ss.port = port;
-            if (!seeds.isEmpty()) {
-                ss.seeds = Arrays.stream(seeds.split(",")).map(String::trim).filter(v -> !v.isEmpty()).collect(Collectors.toList());
-            }
+            ss.seeds = seeds; // vide => découverte LAN ; sinon WAN si des seeds sont présents
 
-            // Sauvegarde locale -> auto-login au prochain lancement
             config.saveLastSession(ss);
-
             goMain();
         } catch (Exception e) {
             System.err.println("Failed to join group: " + e.getMessage());
         }
     }
+
+    private int parseIntOrDefault(String s, int def) {
+        try {
+            if (s == null) return def;
+            String t = s.trim();
+            return t.isEmpty() ? def : Integer.parseInt(t);
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
 
     private void goMain() {
         try {

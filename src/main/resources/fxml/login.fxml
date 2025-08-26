@@ -9,7 +9,7 @@
             <padding>
                 <Insets top="30" right="30" bottom="30" left="30"/>
             </padding>
-            <Label text="Connexion / Création de compte commun" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+            <Label text="Création de compte commun" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
             <GridPane hgap="10" vgap="10">
                 <columnConstraints>
                     <ColumnConstraints minWidth="120" halignment="RIGHT"/>
