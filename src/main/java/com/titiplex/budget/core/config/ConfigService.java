@@ -60,14 +60,25 @@ public class ConfigService {
 
             ss.displayName = (String) last.get("displayName");
             ss.groupId = (String) last.get("groupId");
+
             Object port = last.get("port");
             ss.port = (port instanceof Number) ? ((Number) port).intValue() : 7800;
-            ss.seeds = (List<String>) last.get("seeds");
-            String enc = (String) last.get("encGroupPass");
-            ss.groupPass = lockbox.open(enc);
 
-            return ss.displayName != null && ss.groupId != null && ss.groupPass != null;
+            List<String> seeds = (List<String>) last.get("seeds");
+            ss.seeds = (seeds != null) ? seeds : new java.util.ArrayList<>();
+
+            String enc = (String) last.get("encGroupPass");
+            ss.groupPass = (enc != null && !enc.isBlank()) ? lockbox.open(enc) : null;
+
+            boolean ok = ss.displayName != null && ss.groupId != null && ss.groupPass != null;
+            if (!ok) {
+                System.out.println("[config] tryRestore incomplet: "
+                        + "name=" + ss.displayName + ", gid=" + ss.groupId + ", pass?=" + (ss.groupPass != null)
+                        + ", seeds=" + ss.seeds.size());
+            }
+            return ok;
         } catch (Exception e) {
+            System.out.println("[config] tryRestore exception: " + e.getMessage());
             return false;
         }
     }

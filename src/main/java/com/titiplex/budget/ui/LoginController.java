@@ -55,9 +55,12 @@ public class LoginController {
         Platform.runLater(() -> {
             boolean reset = Boolean.getBoolean("app.resetLogin"); // optionnel: -Dapp.resetLogin=true
             if (!reset && config.tryRestore(ss)) {
+                System.out.println("[login] auto-restore ok: gid=" + ss.groupId + ", seeds=" + ss.seeds.size());
                 // On a déjà displayName/userId via IdentityService; s'il n'existe pas, on le crée ici
                 idSvc.ensureIdentity(ss, ss.displayName != null ? ss.displayName : "Me");
                 goMain();
+            } else {
+                System.out.println("[login] pas d'auto-restore (reset=" + reset + ")");
             }
         });
     }

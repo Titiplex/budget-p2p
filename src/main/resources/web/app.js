@@ -11,6 +11,25 @@ let DISPLAY_CCY = localStorage.getItem("display_ccy") || "EUR";
 // Espace pour les instances de graphiques
 window.__charts = window.__charts || {};
 
+function syncNetworkPanel() {
+    const sec = document.getElementById('network');
+    if (!sec || !window.bridge || !window.bridge.netInfo) return;
+    try {
+        const info = JSON.parse(window.bridge.netInfo());
+        // On montre le panneau seulement si on n'a AUCUN seed (cas premier lien WAN)
+        const needWan = (info.mode === 'WAN' && Number(info.seeds || 0) === 0);
+        sec.style.display = needWan ? '' : 'none';
+        const s = document.getElementById('nw-status');
+        if (s) {
+            s.textContent = info.connected
+                ? `Connecté (${info.mode}) — seeds: ${info.seeds}`
+                : (needWan ? 'Hors ligne — entrez un code WAN pour rejoindre.' : '');
+        }
+    } catch (e) {
+        // en cas d'erreur, on ne bloque pas l'UI
+    }
+}
+
 function destroyChart(id) {
     const c = window.__charts[id];
     if (c && typeof c.destroy === 'function') {
@@ -29,6 +48,7 @@ window.onExpenses = (json) => {
     renderBudgetsTable();
     refreshAnalytics();
     populateDisplayCcyOptions();
+    syncNetworkPanel();
 };
 
 window.onBudgets = (json) => {
@@ -36,6 +56,7 @@ window.onBudgets = (json) => {
     renderBudgetsTable();
     refreshAnalytics();
     populateDisplayCcyOptions();
+    syncNetworkPanel();
 };
 
 window.onFx = (json) => {
@@ -44,11 +65,13 @@ window.onFx = (json) => {
     renderBudgetsTable();
     refreshAnalytics();
     populateDisplayCcyOptions();
+    syncNetworkPanel();
 };
 
 window.onRules = (json) => {
     RULES = JSON.parse(json);
     renderRulesTable();
+    syncNetworkPanel();
 };
 
 // ===== Router simple (3 vues) =====
@@ -634,25 +657,55 @@ function q(s) {
     return document.querySelector(s);
 }
 
-function toast(msg, cls=''){
-    const t = document.createElement('div'); t.className = 'toast '+cls; t.textContent = msg;
-    const box = document.getElementById('toasts'); box.appendChild(t);
-    setTimeout(()=> { t.remove(); }, 5000);
+function toast(msg, cls = '') {
+    const t = document.createElement('div');
+    t.className = 'toast ' + cls;
+    t.textContent = msg;
+    const box = document.getElementById('toasts');
+    box.appendChild(t);
+    setTimeout(() => {
+        t.remove();
+    }, 5000);
 }
 
 let LAST_ALERTS = new Set();
-function checkAlerts(){
+
+function checkAlerts() {
     // seuils : >=80% du budget ou dépassement
     const spentByCat = groupByCategoryIn(DISPLAY_CCY, EXPENSES.filter(isSameMonth));
     for (const b of BUDGETS) {
         const planned = convertToCurrency(b.monthlyLimit, b.currency, DISPLAY_CCY) + computeRollover(b, prevMonthStats(DISPLAY_CCY));
-        const spent = spentByCat.get(b.category)||0;
-        const key80 = '80:'+b.category, keyOver = '100:'+b.category;
-        if (planned>0 && spent/planned >= 0.8 && !LAST_ALERTS.has(key80)) {
-            toast(`Alerte 80% — ${b.category}: ${spent.toFixed(2)}/${planned.toFixed(2)} ${DISPLAY_CCY}`, ''); LAST_ALERTS.add(key80);
+        const spent = spentByCat.get(b.category) || 0;
+        const key80 = '80:' + b.category, keyOver = '100:' + b.category;
+        if (planned > 0 && spent / planned >= 0.8 && !LAST_ALERTS.has(key80)) {
+            toast(`Alerte 80% — ${b.category}: ${spent.toFixed(2)}/${planned.toFixed(2)} ${DISPLAY_CCY}`, '');
+            LAST_ALERTS.add(key80);
         }
         if (spent > planned && !LAST_ALERTS.has(keyOver)) {
-            toast(`Dépassement — ${b.category}: ${spent.toFixed(2)}>${planned.toFixed(2)} ${DISPLAY_CCY}`, 'warn'); LAST_ALERTS.add(keyOver);
+            toast(`Dépassement — ${b.category}: ${spent.toFixed(2)}>${planned.toFixed(2)} ${DISPLAY_CCY}`, 'warn');
+            LAST_ALERTS.add(keyOver);
         }
     }
 }
+
+document.getElementById('nw-gen').addEventListener('click', () => {
+    if (!window.bridge || !window.bridge.generateInviteCode) return alert('Bridge manquant');
+    const code = window.bridge.generateInviteCode();
+    navigator.clipboard?.writeText(code);
+    document.getElementById('nw-code').value = code;
+    document.getElementById('nw-status').textContent = "Code copié. Valable ~1h.";
+});
+
+document.getElementById('nw-join').addEventListener('click', () => {
+    const code = document.getElementById('nw-code').value.trim();
+    if (!code) return;
+    const res = window.bridge.joinFromInviteCode(code);
+    const s = document.getElementById('nw-status');
+    if (typeof res === 'string' && res.startsWith('OK')) {
+        s.textContent = "Joint — connexion en cours…";
+        setTimeout(syncNetworkPanel, 500); // seeds persistés → panneau se masquera
+    } else if (res === 'INVALID_GROUP') s.textContent = "Code d’un autre groupe.";
+    else s.textContent = "Échec: " + res;
+});
+
+syncNetworkPanel();

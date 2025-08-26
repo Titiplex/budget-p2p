@@ -7,7 +7,10 @@ import com.titiplex.budget.core.crdt.HLC;
 import com.titiplex.budget.core.crypto.SessionState;
 import com.titiplex.budget.core.fx.FxAutoService;
 import com.titiplex.budget.core.model.*;
+import com.titiplex.budget.core.p2p.InviteCodec;
+import com.titiplex.budget.core.p2p.JGroupsP2PService;
 import com.titiplex.budget.core.p2p.P2PService;
+import com.titiplex.budget.core.p2p.WanDiscoveryService;
 import com.titiplex.budget.core.recurring.RecurringService;
 import com.titiplex.budget.core.store.Repository;
 import javafx.application.Platform;
@@ -35,6 +38,7 @@ public class MainController {
     private final ConfigService config;
     private final FxAutoService fxAuto;
     private final RecurringService recurring;
+    private final WanDiscoveryService wan;
     private final ObjectMapper mapper = new ObjectMapper();
     private final HLC.Clock clock;
 
@@ -51,6 +55,7 @@ public class MainController {
         this.config = config;
         this.fxAuto = fxAuto;
         this.recurring = recurring;
+        this.wan = new WanDiscoveryService(ss);
         this.clock = new HLC.Clock(ss.userId == null ? UUID.randomUUID().toString() : ss.userId);
     }
 
@@ -59,26 +64,37 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        // Start P2P
-        p2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, this::onRemoteOp);
+        wan.start(ss.port);
+
+        String ext = wan.hasPublic() ? wan.publicSocket().getAddress().getHostAddress() : null;
+
+        // Start P2P (prend external_addr si dispo)
+        if (p2p instanceof JGroupsP2PService jp2p) {
+            jp2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, ext, this::onRemoteOp);
+        } else {
+            p2p.start(ss.groupId, ss.groupPass, ss.seeds, ss.port, this::onRemoteOp);
+        }
+
+        if (wan.hasPublic()) {
+            String host = wan.publicSocket().getAddress().getHostAddress();
+            ((JGroupsP2PService)p2p).announceSelfSeed(host, wan.publicSocket().getPort());
+        }
         recurring.start();
 
         config.saveLastSession(ss);
 
-        // UI
         WebEngine engine = webview.getEngine();
         engine.load(Objects.requireNonNull(getClass().getResource("/web/index.html")).toExternalForm());
-
         engine.getLoadWorker().stateProperty().addListener((_, _, st) -> {
             if (st.toString().equals("SUCCEEDED")) {
                 JSObject win = (JSObject) engine.executeScript("window");
-                win.setMember("bridge", new JsBridge(this));
+                win.setMember("bridge", new JsBridge(this, ss, p2p));
                 pushAll();
                 pushBudgets();
                 pushFx();
                 pushRules();
-                fxAuto.startScheduler();     // planifie (si app.fx.auto=true)
-                fxAuto.fetchNow();           // tente une MAJ immédiate au lancement
+                fxAuto.startScheduler();
+                fxAuto.fetchNow();
             }
         });
     }
@@ -510,6 +526,25 @@ public class MainController {
             pushGoals();
         } catch (Exception e) {
             System.err.println("Failed to delete goal: " + e.getMessage());
+        }
+    }
+
+    public String generateInviteCode() {
+        return wan.generateInvite();
+    }
+    public String joinFromInviteCode(String code) {
+        try {
+            InviteCodec.Parsed p = wan.parse(code);
+            // vérifie groupId cohérent (ou autorise à rejoindre s'il est vide)
+            if (!ss.groupId.equals(p.gid())) return "INVALID_GROUP";
+            String seed = p.host() + "[" + p.port() + "]";
+            if (!ss.seeds.contains(seed)) ss.seeds.add(seed);
+            // reconnecte en TCP
+            ((JGroupsP2PService)p2p).addSeedAndReconnect(p.host(), p.port(), ss.seeds);
+            config.saveLastSession(ss);
+            return "OK";
+        } catch (Exception e) {
+            return "ERROR:" + e.getMessage();
         }
     }
 }
