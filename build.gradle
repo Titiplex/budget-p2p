@@ -98,16 +98,16 @@ jlink {
         description = appDesc
 
         if (OS.isWindows()) {
-            icon = file('packaging/icons/budgetp2p.ico')
+            icon = file("packaging/icons/budgetp2p.ico").absolutePath
             installerType = 'exe'   // 'msi' possible avec WiX
             installerOptions = ['--win-menu', '--win-shortcut', '--win-dir-chooser', '--win-menu-group', appName]
         } else if (OS.isMacOsX()) {
             // iconutil -c icns budgetp2p.iconset -o packaging/icons/budgetp2p.icns
-            icon = file('packaging/icons/budgetp2p.icns')
+            icon = file("packaging/icons/budgetp2p.icns").absolutePath
             installerType = 'dmg'
             installerOptions = ['--mac-package-identifier', 'com.titiplex.budget', '--mac-package-name', appName]
         } else {
-            icon = file('packaging/icons/budgetp2p.png')
+            icon = file("packaging/icons/budgetp2p.png").absolutePath
             installerType = 'deb'   // ou 'rpm'
             installerOptions = ['--linux-shortcut', '--linux-menu-group', 'Office;Finance;']
         }
