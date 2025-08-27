@@ -121,14 +121,14 @@ button.rowdel {
     cursor: pointer;
 }
 
-#budgets .row, #fx .row, #rules .row, #recurring .row, #network .row, #goals .row {
+#budgets .row, #fx .row, #rules .row, #recurring .row, #network .row, #goals .row, #categories .row {
     display: flex;
     gap: 8px;
     margin: 10px 0;
     flex-wrap: wrap;
 }
 
-#budgets input, #fx input, #rules input, #rules select, #recurring input, #recurring select, #network input, #network select, #goals input, #goals select {
+#budgets input, #fx input, #rules input, #rules select, #recurring input, #recurring select, #network input, #network select, #goals input, #goals select, #categories input, #categories select {
     flex: 1;
     min-width: 160px;
     padding: 8px;
@@ -138,7 +138,7 @@ button.rowdel {
     color: #eaeef3;
 }
 
-#budgets button, #fx button, #rules button, #recurring button, #network button, #goals button {
+#budgets button, #fx button, #rules button, #recurring button, #network button, #goals button, #categories button {
     padding: 8px 12px;
     border-radius: 8px;
     border: 1px solid #28313b;

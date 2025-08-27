@@ -11,6 +11,112 @@ let DISPLAY_CCY = localStorage.getItem("display_ccy") || "EUR";
 // Espace pour les instances de graphiques
 window.__charts = window.__charts || {};
 
+// ---- Données auxiliaires pour les sélecteurs ----
+let SELF_NAME = "Moi";               // sera écrasé par bridge
+try {
+    if (window.bridge && window.bridge.getSelfName) SELF_NAME = window.bridge.getSelfName() || "Moi";
+} catch (_) {
+}
+
+const LS_USER_CATS = "user_categories"; // stockage local des catégories ajoutées
+function loadUserCats() {
+    try {
+        return JSON.parse(localStorage.getItem(LS_USER_CATS) || "[]");
+    } catch {
+        return [];
+    }
+}
+
+function saveUserCats(arr) {
+    localStorage.setItem(LS_USER_CATS, JSON.stringify(Array.from(new Set(arr)).sort()));
+}
+
+function allCategories() {
+    const set = new Set(loadUserCats());
+    EXPENSES.forEach(e => e.category && set.add(e.category));
+    BUDGETS.forEach(b => b.category && set.add(b.category));
+    RULES.forEach(r => r.category && set.add(r.category));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+function populateCategoriesDatalist() {
+    const dl = document.getElementById('dl-categories');
+    if (!dl) return;
+    dl.innerHTML = allCategories().map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+}
+
+function allCurrencies() {
+    const set = new Set([FX_BASE]);
+    FX.forEach(r => r.code && set.add(r.code.toUpperCase()));
+    EXPENSES.forEach(e => e.currency && set.add(e.currency.toUpperCase()));
+    BUDGETS.forEach(b => b.currency && set.add(b.currency.toUpperCase()));
+    return Array.from(set).sort();
+}
+
+function fillSelectOptions(id, values, current) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = current || sel.value;
+    sel.innerHTML = values.map(v => `<option ${v === cur ? 'selected' : ''}>${v}</option>`).join('');
+    if (!values.includes(cur)) sel.value = values[0] || "";
+}
+
+function populateAllCurrencySelectors() {
+    const vals = allCurrencies();
+    fillSelectOptions('currency', vals, DISPLAY_CCY);
+    fillSelectOptions('b-cur', vals, 'EUR');
+    fillSelectOptions('rec-ccy', vals, 'EUR');
+    fillSelectOptions('g-ccy', vals, 'EUR');
+}
+
+function knownPeople() {
+    const set = new Set([SELF_NAME]);
+    EXPENSES.forEach(e => e.who && set.add(e.who));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+function populateWhoSelector() {
+    const sel = document.getElementById('who');
+    if (!sel) return;
+    const people = knownPeople();
+    const want = localStorage.getItem('who_default') || SELF_NAME;
+    sel.innerHTML = people.map(p => `<option ${p === want ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
+}
+
+// Gestionnaire Catégories (local)
+(function bindCategoryManager() {
+    const addBtn = document.getElementById('cat-add');
+    if (!addBtn) return; // pas de section
+    addBtn.addEventListener('click', () => {
+        const v = (document.getElementById('cat-new').value || '').trim();
+        if (!v) return;
+        const cur = loadUserCats();
+        if (!cur.includes(v)) {
+            cur.push(v);
+            saveUserCats(cur);
+        }
+        document.getElementById('cat-new').value = '';
+        renderCatList();
+        populateCategoriesDatalist();
+    });
+
+    function renderCatList() {
+        const ul = document.getElementById('cat-list');
+        const arr = loadUserCats();
+        ul.innerHTML = arr.map(c => `<li>${escapeHtml(c)} <button data-c="${escapeHtml(c)}">×</button></li>`).join('');
+        ul.querySelectorAll('button').forEach(b => {
+            b.addEventListener('click', () => {
+                const c = b.dataset.c;
+                saveUserCats(loadUserCats().filter(x => x !== c));
+                renderCatList();
+                populateCategoriesDatalist();
+            });
+        });
+    }
+
+    renderCatList();
+})();
+
 function syncNetworkPanel() {
     const sec = document.getElementById('network');
     if (!sec || !window.bridge || !window.bridge.netInfo) return;
@@ -49,6 +155,9 @@ window.onExpenses = (json) => {
     refreshAnalytics();
     populateDisplayCcyOptions();
     syncNetworkPanel();
+    populateCategoriesDatalist();
+    populateAllCurrencySelectors();
+    populateWhoSelector();
 };
 
 window.onBudgets = (json) => {
@@ -57,6 +166,9 @@ window.onBudgets = (json) => {
     refreshAnalytics();
     populateDisplayCcyOptions();
     syncNetworkPanel();
+    populateCategoriesDatalist();
+    populateAllCurrencySelectors();
+    populateWhoSelector();
 };
 
 window.onFx = (json) => {
@@ -66,12 +178,18 @@ window.onFx = (json) => {
     refreshAnalytics();
     populateDisplayCcyOptions();
     syncNetworkPanel();
+    populateCategoriesDatalist();
+    populateAllCurrencySelectors();
+    populateWhoSelector();
 };
 
 window.onRules = (json) => {
     RULES = JSON.parse(json);
     renderRulesTable();
     syncNetworkPanel();
+    populateCategoriesDatalist();
+    populateAllCurrencySelectors();
+    populateWhoSelector();
 };
 
 // ===== Router simple (3 vues) =====
@@ -222,16 +340,22 @@ function renderExpensesTable() {
 }
 
 document.getElementById('add').addEventListener('click', () => {
-    const who = document.getElementById('who').value.trim();
-    let category = document.getElementById('category').value.trim();
-    const amount = document.getElementById('amount').value.trim();
-    const currency = document.getElementById('currency').value.trim();
-    const note = document.getElementById('note').value.trim();
+    const who = (document.getElementById('who').value || '').trim();
+    let category = (document.getElementById('category').value || '').trim();
+    const amount = (document.getElementById('amount').value || '').trim();
+    const currency = (document.getElementById('currency').value || '').trim();
+    const note = (document.getElementById('note').value || '').trim();
     if (!who || !amount) return alert('Champs requis manquants.');
+
+    // auto-cat si vide
     if (!category) {
         const c = applyRules({who, note});
         if (c) category = c;
     }
+
+    // mémorise le choix par défaut de "qui"
+    localStorage.setItem('who_default', who);
+
     const e = {id: '', who, category, amount, currency, note, ts: Date.now(), deleted: false, ver: '', author: ''};
     window.bridge.addExpense(JSON.stringify(e));
     document.getElementById('note').value = '';
@@ -240,9 +364,9 @@ document.getElementById('add').addEventListener('click', () => {
 
 // ===== Budgets (calculs en devise d'affichage) =====
 document.getElementById('b-save').addEventListener('click', () => {
-    const category = document.getElementById('b-cat').value.trim();
+    const category = document.getElementById('b-cat').value.trim();          // input + datalist
     const monthlyLimit = document.getElementById('b-limit').value.trim();
-    const currency = document.getElementById('b-cur').value.trim();
+    const currency = document.getElementById('b-cur').value.trim();          // <select>
     if (!category || !monthlyLimit) return alert('Catégorie et plafond requis.');
     const rolloverMode = document.getElementById('b-roll').value.trim();
     const rolloverCap = document.getElementById('b-cap').value.trim() || '0';
@@ -570,8 +694,9 @@ document.getElementById('rec-save').addEventListener('click', () => {
         day: parseInt(val('rec-day') || '0', 10),
         weekday: parseInt(val('rec-weekday') || '0', 10),
         month: parseInt(val('rec-month') || '0', 10),
-        amount: val('rec-amount'), currency: val('rec-ccy'),
-        category: val('rec-cat'), note: val('rec-note'),
+        amount: val('rec-amount'),
+        currency: document.getElementById('rec-ccy').value.trim(),   // <select>
+        category: document.getElementById('rec-cat').value.trim(),   // input + datalist
         active: true, deleted: false, ver: '', author: ''
     };
     if (!payload.name || !payload.period || !payload.amount) return alert('Nom/période/montant requis.');
@@ -614,7 +739,7 @@ window.onGoals = (json) => {
 let GOALS = [];
 
 document.getElementById('g-save').addEventListener('click', () => {
-    const name = v('g-name'), target = v('g-target'), currency = v('g-ccy'), due = v('g-due');
+    const name = v('g-name'), target = v('g-target'), currency = document.getElementById('g-ccy').value.trim(); // <select>, due = v('g-due');
     if (!name || !target || !currency) return alert('Nom/target/devise requis.');
     const dueTs = due ? Date.parse(due + 'T00:00:00') : 0;
     const payload = {id: '', name, target, currency, dueTs, deleted: false, ver: '', author: ''};

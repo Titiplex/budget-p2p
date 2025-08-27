@@ -28,11 +28,27 @@
 <!-- ===== Transactions ===== -->
 <section id="view-transactions" class="view active" data-view="transactions">
     <div id="form">
-        <label for="who"></label><input id="who" placeholder="Qui ?"/>
-        <label for="category"></label><input id="category" placeholder="Catégorie"/>
-        <label for="amount"></label><input id="amount" placeholder="Montant (ex: 12.50)"/>
-        <label for="currency"></label><input id="currency" placeholder="Devise (ex: EUR, CAD)" value="EUR"/>
-        <label for="note"></label><input id="note" placeholder="Note (optionnel)"/>
+        <!-- Qui ? -->
+        <label for="who"></label>
+        <select id="who"></select>
+
+        <!-- Catégorie : sélection + saisie libre via datalist -->
+        <label for="category"></label>
+        <input id="category" list="dl-categories" placeholder="Catégorie"/>
+        <datalist id="dl-categories"></datalist>
+
+        <!-- Montant -->
+        <label for="amount"></label>
+        <input id="amount" placeholder="Montant (ex: 12.50)"/>
+
+        <!-- Devise -->
+        <label for="currency"></label>
+        <select id="currency"></select>
+
+        <!-- Note -->
+        <label for="note"></label>
+        <input id="note" placeholder="Note (optionnel)"/>
+
         <button id="add">Ajouter</button>
         <button id="exportCsv">Exporter CSV</button>
         <button id="exportHtml">Exporter Rapport (HTML)</button>
@@ -78,12 +94,22 @@
 
 <!-- ===== Réglages (budgets, FX, règles) ===== -->
 <section id="view-settings" class="view" data-view="settings">
+    <section id="categories">
+        <h2>Catégories</h2>
+        <div class="row">
+            <label for="cat-new"></label><input id="cat-new" placeholder="Nouvelle catégorie"/>
+            <button id="cat-add">Ajouter</button>
+        </div>
+        <ul id="cat-list" class="simple-list"></ul>
+        <p class="hint">Les catégories sont fusionnées entre : vos ajouts (locaux), les budgets, les règles et celles vues dans les transactions.</p>
+    </section>
+
     <section id="budgets">
         <h2>Budgets par catégorie (saisis dans la devise d’origine)</h2>
         <div class="row">
-            <label for="b-cat"></label><input id="b-cat" placeholder="Catégorie"/>
+            <label for="b-cat"></label><input id="b-cat" list="dl-categories" placeholder="Catégorie"/>
             <label for="b-limit"></label><input id="b-limit" placeholder="Plafond mensuel (ex: 200)"/>
-            <label for="b-cur"></label><input id="b-cur" placeholder="Devise budget" value="EUR"/>
+            <label for="b-cur"></label><select id="b-cur"></select>
             <label for="b-roll"></label>
             <select id="b-roll">
                 <option>NONE</option>
@@ -118,7 +144,7 @@
             <option>REGEX</option>
         </select>
             <label for="r-pattern"></label><input id="r-pattern" placeholder="Mot-clé ou regex"/>
-            <label for="r-category"></label><input id="r-category" placeholder="Catégorie cible"/>
+            <label for="r-category"></label><input id="r-category" list="dl-categories" placeholder="Catégorie cible"/>
             <button id="r-save">Ajouter / Mettre à jour</button>
         </div>
         <table id="tbl-rules">
@@ -148,8 +174,8 @@
             <label for="rec-weekday"></label><input id="rec-weekday" placeholder="Jour semaine (1=Mon..7=Sun)"/>
             <label for="rec-month"></label><input id="rec-month" placeholder="Mois (1..12)"/>
             <label for="rec-amount"></label><input id="rec-amount" placeholder="Montant"/>
-            <label for="rec-ccy"></label><input id="rec-ccy" placeholder="Devise" value="EUR"/>
-            <label for="rec-cat"></label><input id="rec-cat" placeholder="Catégorie"/>
+            <label for="rec-ccy"></label><select id="rec-ccy"></select>
+            <label for="rec-cat"></label><input id="rec-cat" list="dl-categories" placeholder="Catégorie"/>
             <label for="rec-note"></label><input id="rec-note" placeholder="Note"/>
             <button id="rec-save">Enregistrer</button>
         </div>
@@ -174,7 +200,7 @@
         <div class="row">
             <label for="g-name"></label><input id="g-name" placeholder="Nom"/>
             <label for="g-target"></label><input id="g-target" placeholder="Cible (ex: 1200)"/>
-            <label for="g-ccy"></label><input id="g-ccy" placeholder="Devise" value="EUR"/>
+            <label for="g-ccy"></label><select id="g-ccy"></select>
             <label for="g-due"></label><input id="g-due" placeholder="Échéance (YYYY-MM-DD)"/>
             <button id="g-save">Enregistrer</button>
         </div>

@@ -1,5 +1,6 @@
 package com.titiplex.budget.ui;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.titiplex.budget.core.crypto.SessionState;
 import com.titiplex.budget.core.p2p.JGroupsP2PService;
 import com.titiplex.budget.core.p2p.P2PService;
@@ -95,9 +96,14 @@ public class JsBridge {
             map.put("connected", connected);
             map.put("mode", (ss.seeds != null && !ss.seeds.isEmpty()) ? "WAN" : "LAN");
             map.put("seeds", ss.seeds == null ? 0 : ss.seeds.size());
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
+            return new ObjectMapper().writeValueAsString(map);
         } catch (Exception e) {
             return "{\"connected\":false,\"mode\":\"LAN\",\"seeds\":0}";
         }
+    }
+
+    // dans com.titiplex.budget.ui.JsBridge
+    public String getSelfName() {
+        return ss.displayName != null && !ss.displayName.isBlank() ? ss.displayName : "Moi";
     }
 }
