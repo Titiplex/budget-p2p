@@ -95,6 +95,15 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                     "ver TEXT, " +
                     "author TEXT)");
 
+            st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS category(
+                      id TEXT PRIMARY KEY,
+                      name TEXT NOT NULL UNIQUE,     -- unicité par nom (insensible à la casse si tu veux: COLLATE NOCASE)
+                      deleted INTEGER NOT NULL DEFAULT 0,
+                      ver TEXT NOT NULL,
+                      author TEXT NOT NULL
+                    );
+                    """);
             try {
                 st.executeUpdate("ALTER TABLE budgets ADD COLUMN rollover_mode TEXT DEFAULT 'NONE'");
             } catch (SQLException ignore) {
@@ -588,4 +597,55 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
             throw new RuntimeException(e);
         }
     }
+
+    @Override
+    public List<Category> listCategoriesActive() {
+        var out = new java.util.ArrayList<Category>();
+        try (var ps = conn.prepareStatement("SELECT id,name,deleted,ver,author FROM category WHERE deleted=0 ORDER BY name ASC")) {
+            try (var rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new Category(
+                            rs.getString(1), rs.getString(2),
+                            rs.getInt(3) != 0, rs.getString(4), rs.getString(5)));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return out;
+    }
+
+    @Override
+    public void upsertCategory(Category c) {
+        // Upsert par nom (UNIQUE) : si le nom existe, on "réactive" et on met à jour ver/author
+        final String sql = """
+                INSERT INTO category(id,name,deleted,ver,author)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(name) DO UPDATE SET deleted=excluded.deleted, ver=excluded.ver, author=excluded.author
+                """;
+        try (var ps = conn.prepareStatement(sql)) {
+            ps.setString(1, c.id());
+            ps.setString(2, c.name());
+            ps.setInt(3, c.deleted() ? 1 : 0);
+            ps.setString(4, c.ver());
+            ps.setString(5, c.author());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void tombstoneCategory(String id, String ver, String author) {
+        // on peut supprimer par id ou par nom unique ; ici par id
+        try (var ps = conn.prepareStatement("UPDATE category SET deleted=1, ver=?, author=? WHERE id=?")) {
+            ps.setString(1, ver);
+            ps.setString(2, author);
+            ps.setString(3, id);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

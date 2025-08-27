@@ -1,6 +1,7 @@
 // ===== Etat =====
 let EXPENSES = [];
 let BUDGETS = [];
+let CATEGORIES = [];  // sync P2P
 let FX = []; // { code, perBase } per EUR
 let RULES = [];
 const FX_BASE = "EUR";
@@ -31,19 +32,54 @@ function saveUserCats(arr) {
     localStorage.setItem(LS_USER_CATS, JSON.stringify(Array.from(new Set(arr)).sort()));
 }
 
-function allCategories() {
-    const set = new Set(loadUserCats());
-    EXPENSES.forEach(e => e.category && set.add(e.category));
-    BUDGETS.forEach(b => b.category && set.add(b.category));
-    RULES.forEach(r => r.category && set.add(r.category));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-}
+window.onCategories = (json) => {
+    CATEGORIES = JSON.parse(json);
+    renderCategoryTable();
+    populateCategoriesDatalist();    // alimente datalist pour tous les formulaires
+};
 
 function populateCategoriesDatalist() {
     const dl = document.getElementById('dl-categories');
     if (!dl) return;
-    dl.innerHTML = allCategories().map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+    // on part de la source P2P (CATEGORIES) puis on ajoute celles vues dans les données (au cas où)
+    const set = new Set(CATEGORIES.map(c => c.name));
+    EXPENSES.forEach(e => e.category && set.add(e.category));
+    BUDGETS.forEach(b => b.category && set.add(b.category));
+    RULES.forEach(r => r.category && set.add(r.category));
+    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
+    dl.innerHTML = sorted.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
 }
+
+function renderCategoryTable() {
+    const tbody = document.querySelector('#tbl-cats tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    for (const c of CATEGORIES) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(c.name)}</td>
+      <td><button class="rowdel" data-id="${c.id}">Supprimer</button></td>`;
+        tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('button.rowdel').forEach(b => {
+        b.addEventListener('click', () => {
+            if (!window.bridge || !window.bridge.deleteCategory) return alert('Bridge.deleteCategory manquant');
+            window.bridge.deleteCategory(b.dataset.id);
+        });
+    });
+}
+
+document.getElementById('cat-add')?.addEventListener('click', () => {
+
+    const name = (document.getElementById('cat-new').value || '').trim();
+    if (!name) return;
+    if (CATEGORIES.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+        return alert('Catégorie déjà présente.');
+    }
+    if (!window.bridge || !window.bridge.upsertCategory) return alert('Bridge.upsertCategory manquant');
+    const payload = {id: '', name, deleted: false, ver: '', author: ''};
+    window.bridge.upsertCategory(JSON.stringify(payload));
+    document.getElementById('cat-new').value = '';
+});
 
 function allCurrencies() {
     const set = new Set([FX_BASE]);
@@ -158,6 +194,7 @@ window.onExpenses = (json) => {
     populateCategoriesDatalist();
     populateAllCurrencySelectors();
     populateWhoSelector();
+    populateCategoriesDatalist();
 };
 
 window.onBudgets = (json) => {
@@ -169,6 +206,7 @@ window.onBudgets = (json) => {
     populateCategoriesDatalist();
     populateAllCurrencySelectors();
     populateWhoSelector();
+    populateCategoriesDatalist();
 };
 
 window.onFx = (json) => {
@@ -181,6 +219,7 @@ window.onFx = (json) => {
     populateCategoriesDatalist();
     populateAllCurrencySelectors();
     populateWhoSelector();
+    populateCategoriesDatalist();
 };
 
 window.onRules = (json) => {
@@ -190,6 +229,7 @@ window.onRules = (json) => {
     populateCategoriesDatalist();
     populateAllCurrencySelectors();
     populateWhoSelector();
+    populateCategoriesDatalist();
 };
 
 // ===== Router simple (3 vues) =====

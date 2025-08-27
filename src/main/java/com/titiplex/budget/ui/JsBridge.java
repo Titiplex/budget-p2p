@@ -106,4 +106,8 @@ public class JsBridge {
     public String getSelfName() {
         return ss.displayName != null && !ss.displayName.isBlank() ? ss.displayName : "Moi";
     }
+
+    public void upsertCategory(String json) { ctl.upsertCategoryFromJson(json); }
+
+    public void deleteCategory(String id) { ctl.deleteCategory(id); }
 }

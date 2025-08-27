@@ -90,6 +90,7 @@ public class MainController {
                 pushBudgets();
                 pushFx();
                 pushRules();
+                pushCategories();
 
                 // Démarrages réseau/APIs – protégés par try/catch
                 try {
@@ -197,6 +198,17 @@ public class MainController {
                     repo.tombstoneGoal(g.id(), g.ver(), g.author());
                     pushGoals();
                 }
+                case CATEGORY_UPSERT -> {
+                    Category c = mapper.convertValue(op.payload(), Category.class);
+                    repo.upsertCategory(c);
+                    pushCategories();
+                }
+                case CATEGORY_DELETE -> {
+                    Category c = mapper.convertValue(op.payload(), Category.class);
+                    repo.tombstoneCategory(c.id(), c.ver(), c.author());
+                    pushCategories();
+                }
+
             }
         } catch (Exception e) {
             System.err.println("Failed to process op: " + e.getMessage());
@@ -581,6 +593,54 @@ public class MainController {
             return "OK";
         } catch (Exception e) {
             return "ERROR:" + e.getMessage();
+        }
+    }
+
+    public void pushCategories() {
+        try {
+            var all = repo.listCategoriesActive();
+            String json = mapper.writeValueAsString(all);
+            Platform.runLater(() -> {
+                try {
+                    webview.getEngine().executeScript("window.onCategories(" + mapper.writeValueAsString(json) + ");");
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to push categories: " + e.getMessage());
+        }
+    }
+
+    public void upsertCategoryFromJson(String json) {
+        try {
+            Category in = mapper.readValue(json, Category.class);
+            String ver = clock.tick();
+            // id auto si vide
+            Category c = new Category(
+                    (in.id() == null || in.id().isEmpty()) ? java.util.UUID.randomUUID().toString() : in.id(),
+                    in.name(),
+                    false,
+                    ver,
+                    ss.userId
+            );
+            repo.upsertCategory(c);
+            p2p.broadcast(new Op(Op.Type.CATEGORY_UPSERT, c));
+            pushCategories();
+        } catch (Exception e) {
+            System.err.println("Failed to upsert category: " + e.getMessage());
+        }
+    }
+
+    public void deleteCategory(String id) {
+        try {
+            String ver = clock.tick();
+            Category tomb = new Category(id, "", true, ver, ss.userId);
+            repo.tombstoneCategory(id, ver, ss.userId);
+            p2p.broadcast(new Op(Op.Type.CATEGORY_DELETE, tomb));
+            pushCategories();
+        } catch (Exception e) {
+            System.err.println("Failed to delete category: " + e.getMessage());
         }
     }
 }

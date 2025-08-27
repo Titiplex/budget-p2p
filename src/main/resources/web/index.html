@@ -95,14 +95,24 @@
 <!-- ===== Réglages (budgets, FX, règles) ===== -->
 <section id="view-settings" class="view" data-view="settings">
     <section id="categories">
-        <h2>Catégories</h2>
+        <h2>Catégories (synchronisées)</h2>
         <div class="row">
             <label for="cat-new"></label><input id="cat-new" placeholder="Nouvelle catégorie"/>
             <button id="cat-add">Ajouter</button>
         </div>
-        <ul id="cat-list" class="simple-list"></ul>
-        <p class="hint">Les catégories sont fusionnées entre : vos ajouts (locaux), les budgets, les règles et celles vues dans les transactions.</p>
+        <table id="tbl-cats">
+            <thead>
+            <tr>
+                <th>Nom</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <p class="hint">Cette liste est partagée via P2P. Les sélecteurs de catégories (Transactions, Budgets, Règles,
+            Récurrences) s’y branchent automatiquement.</p>
     </section>
+
 
     <section id="budgets">
         <h2>Budgets par catégorie (saisis dans la devise d’origine)</h2>
