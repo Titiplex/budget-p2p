@@ -102,12 +102,19 @@ public class JsBridge {
         }
     }
 
-    // dans com.titiplex.budget.ui.JsBridge
-    public String getSelfName() {
-        return ss.displayName != null && !ss.displayName.isBlank() ? ss.displayName : "Moi";
+    public void upsertCategory(String json) {
+        ctl.upsertCategoryFromJson(json);
     }
 
-    public void upsertCategory(String json) { ctl.upsertCategoryFromJson(json); }
+    public void deleteCategory(String id) {
+        ctl.deleteCategory(id);
+    }
 
-    public void deleteCategory(String id) { ctl.deleteCategory(id); }
+    public String getSelfName() {
+        return ctl.getSs().displayName != null && !ctl.getSs().displayName.isBlank() ? ctl.getSs().displayName : "Moi";
+    }
+
+    public String getSelfUserId() {
+        return ctl.getSs().userId;
+    }
 }

@@ -8,6 +8,7 @@ public record Op(Type type, Object payload) {
         RULE_UPSERT, RULE_DELETE,
         RECUR_UPSERT, RECUR_DELETE,
         GOAL_UPSERT, GOAL_DELETE,
-        CATEGORY_UPSERT, CATEGORY_DELETE
+        CATEGORY_UPSERT, CATEGORY_DELETE,
+        MEMBER_UPSERT, MEMBER_DELETE
     }
 }

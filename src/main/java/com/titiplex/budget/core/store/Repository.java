@@ -45,9 +45,20 @@ public interface Repository {
     List<RecurringRule> listRecurringActive();
 
     void upsertGoal(Goal g);
+
     void tombstoneGoal(String id, String ver, String author);
+
     List<Goal> listGoalsActive();
+
     List<Category> listCategoriesActive();
+
     void upsertCategory(Category c);
+
     void tombstoneCategory(String id, String ver, String author);
+
+    List<Member> listMembersActive();
+
+    void upsertMember(Member m);
+
+    void tombstoneMember(String id, String ver, String author);
 }

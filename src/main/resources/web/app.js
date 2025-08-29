@@ -2,6 +2,7 @@
 let EXPENSES = [];
 let BUDGETS = [];
 let CATEGORIES = [];  // sync P2P
+let MEMBERS = [];
 let FX = []; // { code, perBase } per EUR
 let RULES = [];
 const FX_BASE = "EUR";
@@ -30,6 +31,35 @@ function loadUserCats() {
 
 function saveUserCats(arr) {
     localStorage.setItem(LS_USER_CATS, JSON.stringify(Array.from(new Set(arr)).sort()));
+}
+
+window.onMembers = (json) => {
+    MEMBERS = JSON.parse(json);
+    renderMembersTable();
+    populateWhoSelector();
+};
+
+function renderMembersTable() {
+    const tbody = document.querySelector('#tbl-members tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    for (const m of MEMBERS) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.id)}</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function populateWhoSelector() {
+    const sel = document.getElementById('who');
+    if (!sel) return;
+    const selfName = (window.bridge?.getSelfName?.() || 'Moi').trim();
+    const set = new Set([selfName]);
+    MEMBERS.forEach(m => m?.name && set.add(m.name));
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b));
+    const current = localStorage.getItem('who_default') || selfName;
+    sel.innerHTML = arr.map(n => `<option ${n === current ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
+    sel.addEventListener('change', () => localStorage.setItem('who_default', sel.value));
 }
 
 window.onCategories = (json) => {
@@ -68,18 +98,21 @@ function renderCategoryTable() {
     });
 }
 
-document.getElementById('cat-add')?.addEventListener('click', () => {
+{
+    const btn = document.getElementById('cat-add');
+    if (btn) btn.addEventListener('click', () => {
 
-    const name = (document.getElementById('cat-new').value || '').trim();
-    if (!name) return;
-    if (CATEGORIES.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-        return alert('Catégorie déjà présente.');
-    }
-    if (!window.bridge || !window.bridge.upsertCategory) return alert('Bridge.upsertCategory manquant');
-    const payload = {id: '', name, deleted: false, ver: '', author: ''};
-    window.bridge.upsertCategory(JSON.stringify(payload));
-    document.getElementById('cat-new').value = '';
-});
+        const name = (document.getElementById('cat-new').value || '').trim();
+        if (!name) return;
+        if (CATEGORIES.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+            return alert('Catégorie déjà présente.');
+        }
+        if (!window.bridge || !window.bridge.upsertCategory) return alert('Bridge.upsertCategory manquant');
+        const payload = {id: '', name, deleted: false, ver: '', author: ''};
+        window.bridge.upsertCategory(JSON.stringify(payload));
+        document.getElementById('cat-new').value = '';
+    });
+}
 
 function allCurrencies() {
     const set = new Set([FX_BASE]);
@@ -109,14 +142,6 @@ function knownPeople() {
     const set = new Set([SELF_NAME]);
     EXPENSES.forEach(e => e.who && set.add(e.who));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-}
-
-function populateWhoSelector() {
-    const sel = document.getElementById('who');
-    if (!sel) return;
-    const people = knownPeople();
-    const want = localStorage.getItem('who_default') || SELF_NAME;
-    sel.innerHTML = people.map(p => `<option ${p === want ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
 }
 
 // Gestionnaire Catégories (local)
@@ -776,15 +801,34 @@ window.onGoals = (json) => {
     GOALS = JSON.parse(json);
     renderGoals();
 };
+
+// Flush des pushes arrivés trop tôt
+(function flushPending() {
+    const q = window.__pending || [];
+    if (q.length) {
+        q.forEach(it => {
+            // it.fn est de la forme "window.onFx"
+            let f = window;
+            for (const k of it.fn.split('.').slice(1)) f = f && f[k];
+            if (typeof f === 'function') f(it.arg);
+        });
+        window.__pending = [];
+    }
+})();
+
 let GOALS = [];
 
 document.getElementById('g-save').addEventListener('click', () => {
-    const name = v('g-name'), target = v('g-target'), currency = document.getElementById('g-ccy').value.trim(); // <select>, due = v('g-due');
+    const name = v('g-name');
+    const target = v('g-target');
+    const currency = document.getElementById('g-ccy').value.trim();
+    const due = v('g-due');
     if (!name || !target || !currency) return alert('Nom/target/devise requis.');
     const dueTs = due ? Date.parse(due + 'T00:00:00') : 0;
     const payload = {id: '', name, target, currency, dueTs, deleted: false, ver: '', author: ''};
     window.bridge.upsertGoal(JSON.stringify(payload));
 });
+
 
 function renderGoals() {
     const tbody = q('#tbl-goals tbody');
@@ -856,7 +900,9 @@ function checkAlerts() {
 document.getElementById('nw-gen').addEventListener('click', () => {
     if (!window.bridge || !window.bridge.generateInviteCode) return alert('Bridge manquant');
     const code = window.bridge.generateInviteCode();
-    navigator.clipboard?.writeText(code);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code);
+    }
     document.getElementById('nw-code').value = code;
     document.getElementById('nw-status').textContent = "Code copié. Valable ~1h.";
 });
@@ -874,3 +920,5 @@ document.getElementById('nw-join').addEventListener('click', () => {
 });
 
 syncNetworkPanel();
+populateAllCurrencySelectors();
+populateDisplayCcyOptions();

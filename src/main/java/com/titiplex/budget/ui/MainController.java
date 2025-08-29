@@ -1,6 +1,5 @@
 package com.titiplex.budget.ui;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.titiplex.budget.core.config.ConfigService;
 import com.titiplex.budget.core.crdt.HLC;
@@ -91,6 +90,8 @@ public class MainController {
                 pushFx();
                 pushRules();
                 pushCategories();
+                advertiseSelfMember();
+                pushMembers();
 
                 // Démarrages réseau/APIs – protégés par try/catch
                 try {
@@ -133,6 +134,10 @@ public class MainController {
 
     private static String escape(String s) {
         return s == null ? "" : s.replace("'", "\\'");
+    }
+
+    SessionState getSs() {
+        return ss;
     }
 
     void onRemoteOp(Op op) {
@@ -208,7 +213,16 @@ public class MainController {
                     repo.tombstoneCategory(c.id(), c.ver(), c.author());
                     pushCategories();
                 }
-
+                case MEMBER_UPSERT -> {
+                    Member m = mapper.convertValue(op.payload(), Member.class);
+                    repo.upsertMember(m);
+                    pushMembers();
+                }
+                case MEMBER_DELETE -> {
+                    Member m = mapper.convertValue(op.payload(), Member.class);
+                    repo.tombstoneMember(m.id(), m.ver(), m.author());
+                    pushMembers();
+                }
             }
         } catch (Exception e) {
             System.err.println("Failed to process op: " + e.getMessage());
@@ -219,14 +233,7 @@ public class MainController {
         List<Expense> all = repo.listActive();
         try {
             String json = mapper.writeValueAsString(all);
-            Platform.runLater(() -> {
-                try {
-                    webview.getEngine()
-                            .executeScript("window.onExpenses(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onExpenses", json));
         } catch (Exception e) {
             System.err.println("Failed to push expenses: " + e.getMessage());
         }
@@ -248,14 +255,7 @@ public class MainController {
         try {
             var all = repo.listBudgetsActive();
             String json = mapper.writeValueAsString(all);
-            Platform.runLater(() ->
-            {
-                try {
-                    webview.getEngine().executeScript("window.onBudgets(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onBudgets", json));
         } catch (Exception e) {
             System.err.println("Failed to push budgets: " + e.getMessage());
         }
@@ -311,13 +311,7 @@ public class MainController {
         try {
             var all = repo.listFxActive();
             String json = mapper.writeValueAsString(all);
-            Platform.runLater(() -> {
-                try {
-                    webview.getEngine().executeScript("window.onFx(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onFx", json));
         } catch (Exception e) {
             System.err.println("Failed to push fx rates: " + e.getMessage());
         }
@@ -327,13 +321,7 @@ public class MainController {
         try {
             var all = repo.listRulesActive();
             String json = mapper.writeValueAsString(all);
-            Platform.runLater(() -> {
-                try {
-                    webview.getEngine().executeScript("window.onRules(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onRules", json));
         } catch (Exception e) {
             System.err.println("Failed to push rules: " + e.getMessage());
         }
@@ -489,14 +477,7 @@ public class MainController {
         try {
             var all = repo.listRecurringActive();
             String json = mapper.writeValueAsString(all);
-            javafx.application.Platform.runLater(() ->
-            {
-                try {
-                    webview.getEngine().executeScript("window.onRecurring(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onRecurring", json));
         } catch (Exception e) {
             System.err.println("Failed to push recurring: " + e.getMessage());
         }
@@ -536,14 +517,7 @@ public class MainController {
         try {
             var all = repo.listGoalsActive();
             String json = mapper.writeValueAsString(all);
-            javafx.application.Platform.runLater(() ->
-            {
-                try {
-                    webview.getEngine().executeScript("window.onGoals(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            javafx.application.Platform.runLater(() -> safeCall("window.onGoals", json));
         } catch (Exception e) {
             System.err.println("Failed to push goals: " + e.getMessage());
         }
@@ -600,13 +574,7 @@ public class MainController {
         try {
             var all = repo.listCategoriesActive();
             String json = mapper.writeValueAsString(all);
-            Platform.runLater(() -> {
-                try {
-                    webview.getEngine().executeScript("window.onCategories(" + mapper.writeValueAsString(json) + ");");
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            Platform.runLater(() -> safeCall("window.onCategories", json));
         } catch (Exception e) {
             System.err.println("Failed to push categories: " + e.getMessage());
         }
@@ -641,6 +609,50 @@ public class MainController {
             pushCategories();
         } catch (Exception e) {
             System.err.println("Failed to delete category: " + e.getMessage());
+        }
+    }
+
+    public void pushMembers() {
+        try {
+            var all = repo.listMembersActive();
+            String json = mapper.writeValueAsString(all);
+            Platform.runLater(() -> safeCall("window.onMembers", json));
+        } catch (Exception e) {
+            System.err.println("Failed to push members: " + e.getMessage());
+        }
+    }
+
+    private void advertiseSelfMember() {
+        try {
+            String ver = clock.tick();
+            var m = new Member(ss.userId, ss.displayName, false, ver, ss.userId);
+            repo.upsertMember(m);
+            p2p.broadcast(new Op(Op.Type.MEMBER_UPSERT, m));
+        } catch (Exception e) {
+            System.err.println("Failed to advertise member: " + e.getMessage());
+        }
+    }
+
+    private void safeCall(String fnName, String jsonArg) {
+        String payload;
+        try {
+            payload = mapper.writeValueAsString(jsonArg); // re-quote le JSON
+        } catch (Exception e) {
+            payload = "''";
+        }
+
+        String script =
+                "try {" +
+                        "  if (typeof " + fnName + " === 'function') { " +
+                        "    " + fnName + "(" + payload + ");" +
+                        "  } else {" +
+                        "    window.__pending = window.__pending || [];" +
+                        "    window.__pending.push({fn: '" + fnName + "', arg: " + payload + "});" +
+                        "  }" +
+                        "} catch(e) { /* swallow */ }";
+        try {
+            webview.getEngine().executeScript(script);
+        } catch (Exception ignore) {
         }
     }
 }

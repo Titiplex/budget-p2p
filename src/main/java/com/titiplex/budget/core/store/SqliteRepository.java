@@ -104,6 +104,15 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
                       author TEXT NOT NULL
                     );
                     """);
+            st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS member(
+                      id TEXT PRIMARY KEY,           -- userId
+                      name TEXT NOT NULL,
+                      deleted INTEGER NOT NULL DEFAULT 0,
+                      ver TEXT NOT NULL,
+                      author TEXT NOT NULL
+                    );
+                    """);
             try {
                 st.executeUpdate("ALTER TABLE budgets ADD COLUMN rollover_mode TEXT DEFAULT 'NONE'");
             } catch (SQLException ignore) {
@@ -648,4 +657,51 @@ public class SqliteRepository implements com.titiplex.budget.core.store.Reposito
         }
     }
 
+    @Override
+    public List<Member> listMembersActive() {
+        var out = new java.util.ArrayList<Member>();
+        try (var ps = conn.prepareStatement(
+                "SELECT id,name,deleted,ver,author FROM member WHERE deleted=0 ORDER BY name ASC")) {
+            try (var rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new Member(
+                            rs.getString(1), rs.getString(2),
+                            rs.getInt(3) != 0, rs.getString(4), rs.getString(5)));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return out;
+    }
+
+    @Override
+    public void upsertMember(Member m) {
+        try (var ps = conn.prepareStatement("""
+                    INSERT INTO member(id,name,deleted,ver,author)
+                    VALUES(?,?,?,?,?)
+                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, deleted=excluded.deleted, ver=excluded.ver, author=excluded.author
+                """)) {
+            ps.setString(1, m.id());
+            ps.setString(2, m.name());
+            ps.setInt(3, m.deleted() ? 1 : 0);
+            ps.setString(4, m.ver());
+            ps.setString(5, m.author());
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void tombstoneMember(String id, String ver, String author) {
+        try (var ps = conn.prepareStatement("UPDATE member SET deleted=1, ver=?, author=? WHERE id=?")) {
+            ps.setString(1, ver);
+            ps.setString(2, author);
+            ps.setString(3, id);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
